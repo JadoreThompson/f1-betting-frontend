@@ -1,0 +1,15 @@
+@import "tailwindcss";
+
+@font-face {
+  font-family: "f1";
+  src: url("/src/assets/fonts/Formula1-Bold.woff") format("woff");
+}
+
+* {
+  font-family: "f1";
+  color: white;
+}
+
+.text-f1 {
+  font-family: "f1";
+}
