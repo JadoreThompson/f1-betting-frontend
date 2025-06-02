@@ -1,37 +1,46 @@
 import {
-    ArrowTrendingDownIcon,
-    ArrowTrendingUpIcon,
-    InformationCircleIcon,
-    XMarkIcon,
+  ArrowTrendingDownIcon,
+  ArrowTrendingUpIcon,
+  XMarkIcon,
 } from "@heroicons/react/24/outline";
-import { useEffect, useState, type FC } from "react";
-import { SecureBettingService as BettingService } from "../classes/BettingService";
+import { useEffect, useRef, useState, type FC, type JSX } from "react";
+import { BettingService, type BetResult } from "../classes/BettingService";
+import { UtilsManager } from "../classes/UtilsManager";
 import type { Market } from "../types";
+
+type Side = "back" | "lay";
+
+interface EnginePayload {
+  amount: number;
+  side: Side;
+  market_id: number;
+  wallet_address: string;
+}
 
 const BettingSlipCard: FC<{
   market: Market;
   setShow: (arg: boolean) => void;
 }> = ({ market, setShow }) => {
-  const [curSide, setSide] = useState<"back" | "lay">("back");
+  const [curSide, setSide] = useState<Side>("back");
   const [amount, setAmount] = useState("");
   const [isVisible, setIsVisible] = useState(false);
   const [isClosing, setIsClosing] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const [bettingService] = useState(() => new BettingService());
+  const formRef = useRef<HTMLFormElement>(null);
 
   useEffect(() => {
     const timer = setTimeout(() => setIsVisible(true), 50);
     return () => clearTimeout(timer);
   }, []);
 
-  const handleClose = () => {
+  const handleClose = (): void => {
     setIsClosing(true);
     setTimeout(() => {
       setShow(false);
     }, 300);
   };
 
-  const formatOdds = (numerator: number, denominator: number) => {
+  const formatOdds = (numerator: number, denominator: number): string => {
     return `${numerator}/${denominator}`;
   };
 
@@ -39,7 +48,7 @@ const BettingSlipCard: FC<{
     stake: number,
     numerator: number,
     denominator: number
-  ) => {
+  ): number => {
     return stake * (numerator / denominator);
   };
 
@@ -47,7 +56,7 @@ const BettingSlipCard: FC<{
     stake: number,
     numerator: number,
     denominator: number
-  ) => {
+  ): number => {
     return stake + calculatePayout(stake, numerator, denominator);
   };
 
@@ -65,48 +74,68 @@ const BettingSlipCard: FC<{
     market.denominator
   );
 
-  const sanitizeInput = (value: string) => !/^\d*\.?\d*$/.test(value.trim());
+  const sanitizeInput = (value: string) => /^\d*\.?\d*$/.test(value.trim());
+
+  async function sendToEngine(payload: EnginePayload): Promise<boolean> {
+    try {
+      const rsp = await fetch(UtilsManager.BASE_URL + "/bet/create", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify(payload),
+        credentials: "include",
+      });
+
+      if (!rsp.ok) throw new Error(`An error occured ${rsp.status}`);
+      return true;
+    } catch (error) {
+      setError("Failed to send bet to engine. Please try again.");
+      return false;
+    }
+  }
 
   async function handleFormSubmit(e: React.FormEvent): Promise<void> {
     e.preventDefault();
-
     if (!sanitizeInput(amount)) {
       setError("Please enter a valid amount.");
+      (e.target as HTMLFormElement).reset();
       return;
     }
 
-    const formData = {
-      amount: amount,
+    const bs = new BettingService();
+    const formData: EnginePayload = {
+      amount: Number.parseFloat(amount),
       side: curSide,
       market_id: market.market_id,
-      wallet_address: await bettingService.connectToMetaMask(),
+      wallet_address: await bs.connectToMetaMask(),
     };
 
-    await bettingService.placeBet(market.market_id, amount);
-    
-    // console.log("Form submitted with data:", formData);
+    const result: BetResult = await bs.placeBet(market.market_id, "1000");
+
+    if (!result.success) {
+      setError("Failed to place bet. Please try again.");
+      return;
+    }
+
+    await sendToEngine(formData);
+    handleClose();
   }
 
-  function renderCardContent() {
+  function renderCardContent(): JSX.Element {
     return (
       <>
-        {/* Header */}
-        <div className="bg-gradient-to-r from-blue-600 to-purple-600 p-4 text-white relative">
+        <div className="flex justify-end p-1">
           <button
             onClick={handleClose}
-            className="absolute top-4 right-4 p-1 hover:bg-white/20 rounded-lg transition-colors"
+            className="p-1 hover:bg-white/20 rounded-lg transition-colors hover:cursor-pointer"
           >
-            <XMarkIcon className="w-5 h-5" />
+            <XMarkIcon className="w-7 h-7" />
           </button>
-
-          <div className="pr-8">
-            <h3 className="font-semibold text-lg mb-1">Place Your Bet</h3>
-            <p className="text-blue-100 text-sm">event</p>
-          </div>
         </div>
 
         {/* Market Info */}
-        <div className="p-4 bg-gray-50 border-b border-gray-200">
+        <div className="p-4 border-b border-gray-200">
           <div className="flex items-center gap-3">
             <div className="w-10 h-10 bg-gradient-to-br from-blue-500 to-purple-600 rounded-full flex items-center justify-center">
               <span className="text-white text-sm font-bold">MV</span>
@@ -125,7 +154,6 @@ const BettingSlipCard: FC<{
           </div>
         </div>
 
-        {/* <form onSubmit={handleFormSubmit}> */}
         {/* Bet Type Selection */}
         <div className="p-4">
           <div className="mb-4">
@@ -134,6 +162,7 @@ const BettingSlipCard: FC<{
             </label>
             <div className="grid grid-cols-2 gap-2">
               <button
+                type="button"
                 onClick={() => setSide("back")}
                 className={`p-3 rounded-xl border-2 transition-all duration-200 flex items-center justify-center gap-2 ${
                   curSide === "back"
@@ -164,7 +193,7 @@ const BettingSlipCard: FC<{
               </button>
             </div>
           </div>
-          <form onSubmit={handleFormSubmit}>
+          <form ref={formRef} onSubmit={handleFormSubmit}>
             {/* Amount Input */}
             <div className="mb-4">
               <label className="block text-sm font-medium text-gray-700 mb-2">
@@ -177,6 +206,15 @@ const BettingSlipCard: FC<{
                 <input
                   type="number"
                   value={amount}
+                  onChange={(e) => {
+                    const value = e.target.value;
+                    if (!sanitizeInput(value)) {
+                      setError("Please enter a valid amount.");
+                    } else {
+                      setError(null);
+                      setAmount(value);
+                    }
+                  }}
                   name="amount"
                   placeholder="0.00"
                   className="w-full pl-8 pr-4 py-3 border border-gray-300 rounded-xl text-lg font-semibold focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-all"
@@ -237,32 +275,18 @@ const BettingSlipCard: FC<{
               </div>
             )}
 
-            {/* Info Box */}
-            <div className="mb-4 p-3 bg-blue-50 rounded-xl border border-blue-200">
-              <div className="flex gap-2">
-                <InformationCircleIcon className="w-5 h-5 text-blue-500 flex-shrink-0 mt-0.5" />
-                <div className="text-sm text-blue-700">
-                  {curSide === "back" ? (
-                    <span>
-                      You're betting <strong>FOR</strong> {market.title} to win.
-                      If they win, you profit ${payout.toFixed(2)}.
-                    </span>
-                  ) : (
-                    <span>
-                      You're betting <strong>AGAINST</strong> {market.title} to
-                      win. Your maximum loss is ${payout.toFixed(2)}.
-                    </span>
-                  )}
-                </div>
+            {error && (
+              <div className="px-4 py-3 bg-gray-50 border-t border-gray-200">
+                <p className="text-xs text-gray-500 text-center">{error}</p>
               </div>
-            </div>
+            )}
 
             {/* Action Buttons */}
             <div className="space-y-2">
               <button
                 type="submit"
                 disabled={!numericAmount || numericAmount <= 0}
-                className={`w-full py-4 px-6 rounded-xl font-semibold text-lg transition-all duration-200 ${
+                className={`w-full py-4 px-6 rounded-xl font-semibold text-lg transition-all duration-200 hover:cursor-pointer ${
                   curSide === "back"
                     ? "bg-green-600 hover:bg-green-700 disabled:bg-gray-300 text-white"
                     : "bg-red-600 hover:bg-red-700 disabled:bg-gray-300 text-white"
@@ -279,8 +303,9 @@ const BettingSlipCard: FC<{
               </button>
 
               <button
+                type="button"
                 onClick={handleClose}
-                className="w-full py-3 px-6 border border-gray-300 rounded-xl font-medium text-gray-700 hover:bg-gray-50 transition-colors"
+                className="w-full py-3 px-6 border border-gray-300 rounded-xl font-medium text-gray-700 hover:bg-gray-50 transition-colors hover:cursor-pointer"
               >
                 Cancel
               </button>
@@ -298,41 +323,52 @@ const BettingSlipCard: FC<{
     );
   }
 
+  useEffect(() => {
+    const handle = () => document.body.classList.toggle("overflow-hidden");
+    handle();
+
+    return () => {
+      handle();
+    };
+  }, []);
+
   return (
     <>
-      {/* Backdrop for mobile */}
-      <div
-        className={`fixed inset-0 bg-black bg-opacity-50 z-40 md:hidden transition-opacity duration-300 ${
-          isVisible && !isClosing
-            ? "opacity-100"
-            : "opacity-0 pointer-events-none"
-        }`}
-        onClick={handleClose}
-      />
+      <div className="w-screen h-screen fixed top-0 left-0 z-100 backdrop-blur-xs">
+        {/* Backdrop for mobile */}
+        <div
+          className={`fixed inset-0 bg-black bg-opacity-50 z-40 md:hidden transition-opacity duration-300 ${
+            isVisible && !isClosing
+              ? "opacity-100"
+              : "opacity-0 pointer-events-none"
+          }`}
+          onClick={handleClose}
+        />
 
-      {/* Desktop: Slide down from top */}
-      <div
-        className={`hidden md:block fixed top-0 left-1/2 transform -translate-x-1/2 z-50 transition-all duration-500 ease-out ${
-          isVisible && !isClosing
-            ? "translate-y-8 opacity-100"
-            : "-translate-y-full opacity-0"
-        }`}
-      >
-        <div className="max-w-md bg-white rounded-2xl shadow-2xl border border-gray-200 overflow-hidden">
-          {renderCardContent()}
+        {/* Desktop: Slide down from top */}
+        <div
+          className={`hidden md:block fixed top-0 left-1/2 transform -translate-x-1/2 z-50 transition-all duration-500 ease-out  ${
+            isVisible && !isClosing
+              ? "translate-y-8 opacity-100"
+              : "-translate-y-full opacity-0"
+          }`}
+        >
+          <div className="max-w-md bg-white rounded-2xl shadow-2xl border border-gray-200 overflow-hidden">
+            {renderCardContent()}
+          </div>
         </div>
-      </div>
 
-      {/* Mobile: Slide up from bottom */}
-      <div
-        className={`md:hidden fixed bottom-0 left-0 right-0 z-50 transition-all duration-500 ease-out ${
-          isVisible && !isClosing
-            ? "translate-y-0 opacity-100"
-            : "translate-y-full opacity-0"
-        }`}
-      >
-        <div className="bg-white rounded-t-3xl shadow-2xl border-t border-gray-200 overflow-hidden max-h-[90vh] overflow-y-auto">
-          {renderCardContent()}
+        {/* Mobile: Slide up from bottom */}
+        <div
+          className={`md:hidden fixed bottom-0 left-0 right-0 z-50 transition-all duration-500 ease-out ${
+            isVisible && !isClosing
+              ? "translate-y-0 opacity-100"
+              : "translate-y-full opacity-0"
+          }`}
+        >
+          <div className="bg-white rounded-t-3xl shadow-2xl border-t border-gray-200 max-h-[90vh] overflow-y-auto">
+            {renderCardContent()}
+          </div>
         </div>
       </div>
     </>

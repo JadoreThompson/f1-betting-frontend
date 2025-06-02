@@ -1,7 +1,6 @@
 import MetaMaskSDK from "@metamask/sdk";
 import { ethers } from "ethers";
 
-// Supported networks configuration
 enum ChainId {
   MAINNET = 1,
   SEPOLIA = 11155111,
@@ -10,7 +9,6 @@ enum ChainId {
 interface NetworkConfig {
   name: string;
   chainId: ChainId;
-  rpcUrl: string;
   bettingEscrow: string;
   usdt: string;
   blockExplorer: string;
@@ -20,7 +18,6 @@ const NETWORK_CONFIGS: Record<ChainId, NetworkConfig> = {
   [ChainId.MAINNET]: {
     name: "Ethereum Mainnet",
     chainId: ChainId.MAINNET,
-    rpcUrl: "https://eth-mainnet.g.alchemy.com/v2/your-api-key",
     bettingEscrow: "0x...",
     usdt: "0xdac17f958d2ee523a2206206994597c13d831ec7",
     blockExplorer: "https://etherscan.io",
@@ -28,19 +25,17 @@ const NETWORK_CONFIGS: Record<ChainId, NetworkConfig> = {
   [ChainId.SEPOLIA]: {
     name: "Sepolia Testnet",
     chainId: ChainId.SEPOLIA,
-    rpcUrl: "https://eth-sepolia.g.alchemy.com/v2/your-api-key",
-    bettingEscrow: "0x32F4761769c46A57CBee447E7b25c650a3fA1ab5",
-    usdt: "0xf1cc45eDf173e05Da4da17685593Da4Ca6AF83d5",
+    bettingEscrow: "0x0282593e4fEa9012052f8C17f9c12947C8957Af2",
+    usdt: "0x0fe922d26fde4a9160bb2d145e851e2d9c2f3f84",
     blockExplorer: "https://sepolia.etherscan.io",
   },
 } as const;
 
-// Contract ABIs (same as before but with additional security functions)
 const BETTING_ESCROW_ABI = [
   {
     inputs: [
       { name: "marketId", type: "uint256" },
-      { name: "amount", type: "uint32" },
+      { name: "amount", type: "uint256" },
     ],
     name: "placeBet",
     outputs: [],
@@ -110,8 +105,7 @@ const USDT_ABI = [
   },
 ] as const;
 
-// Custom error types
-enum BettingErrorType {
+export enum BettingErrorType {
   NETWORK_MISMATCH = "NETWORK_MISMATCH",
   INVALID_AMOUNT = "INVALID_AMOUNT",
   INSUFFICIENT_BALANCE = "INSUFFICIENT_BALANCE",
@@ -149,14 +143,14 @@ interface SecurityValidation {
   isRateLimited: boolean;
 }
 
-export class SecureBettingService {
+export class BettingService {
   private provider: any = null;
   private signer: ethers.Signer | null = null;
   private currentNetwork: NetworkConfig | null = null;
   private bettingContract: ethers.Contract | null = null;
   private usdtContract: ethers.Contract | null = null;
-  private readonly MAX_UINT32 = 4294967295n;
-  private readonly MAX_GAS_PRICE = ethers.parseUnits("100", "gwei"); // 100 gwei max
+  private readonly MAX_UINT256 = 2 ** 256 - 1;
+  private readonly MAX_GAS_PRICE = ethers.parseUnits("1000", "gwei"); // 100 gwei max
 
   /**
    * Validates and sanitizes input for number or address types.
@@ -394,7 +388,6 @@ export class SecureBettingService {
   async placeBet(marketId: number, amount: string): Promise<BetResult> {
     try {
       if (!this.bettingContract || !this.signer || !this.currentNetwork) {
-        console.error("Missing contracts or signer or network");
         throw new BettingError(
           BettingErrorType.CONTRACT_NOT_FOUND,
           "Contracts not initialized"
@@ -415,37 +408,35 @@ export class SecureBettingService {
       const amountWei = ethers.parseUnits(sanitizedAmount, decimals);
 
       if (amountWei <= 0n) {
+        console.error("Amount must be greater than zero");
         throw new BettingError(
           BettingErrorType.INVALID_AMOUNT,
           "Amount must be greater than zero"
         );
       }
 
-      if (amountWei > this.MAX_UINT32) {
+      if (amountWei > this.MAX_UINT256) {
         throw new BettingError(
           BettingErrorType.INVALID_AMOUNT,
-          "Amount exceeds uint32 maximum"
+          "Amount exceeds uint256 maximum"
         );
       }
 
       await this.approveUSDT(sanitizedAmount);
-
       const validations = await this.performSecurityValidations(
         userAddress,
-        marketId,
         amountWei,
         decimals
       );
 
       if (!validations.isValidNetwork || !validations.hasValidContracts) {
-        console.error("Security validation failed");
         throw new BettingError(
           BettingErrorType.NETWORK_MISMATCH,
           "Security validation failed"
         );
       }
 
-      const tx = await this.bettingContract.placeBet(500, 6_000_000);
+      const tx = await this.bettingContract.placeBet(marketId, amountWei);
       const receipt = await tx.wait();
 
       return {
@@ -459,6 +450,7 @@ export class SecureBettingService {
       }
 
       if (error.code === 4001) {
+        console.warn("Transaction rejected by user");
         return {
           success: false,
           error: new BettingError(
@@ -481,7 +473,6 @@ export class SecureBettingService {
   // Comprehensive security validations
   private async performSecurityValidations(
     userAddress: string,
-    marketId: number,
     amountWei: bigint,
     decimals: number
   ): Promise<SecurityValidation> {
@@ -539,11 +530,6 @@ export class SecureBettingService {
     }
 
     return results;
-  }
-
-  // Get current network info
-  getCurrentNetwork(): NetworkConfig | null {
-    return this.currentNetwork;
   }
 
   /**

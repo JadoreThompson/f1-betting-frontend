@@ -9,14 +9,14 @@ const MarketCard: FC<{ market: Market; category: string }> = ({
 }) => {
   const [showBetSlip, setShowBetSlip] = useState<boolean>(false);
 
-  const formatOdds = (numerator: number, denominator: number) => {
+  const formatOdds = (numerator: number, denominator: number): string => {
     return `${numerator}/${denominator}`;
   };
 
   const calculateImpliedProbability = (
     numerator: number,
     denominator: number
-  ) => {
+  ): string => {
     const decimal = numerator / denominator + 1;
     const probability = (1 / decimal) * 100;
     return probability.toFixed(0);

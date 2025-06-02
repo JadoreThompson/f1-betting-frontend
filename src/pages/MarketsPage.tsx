@@ -1,10 +1,11 @@
 import {
-  UserIcon,
+  ArrowTrendingUpIcon,
   Bars3Icon,
   ChartBarIcon,
-  ArrowTrendingUpIcon,
+  UserIcon,
 } from "@heroicons/react/24/outline";
-import { type FC, useState, useEffect } from "react";
+import { useEffect, useState, type FC } from "react";
+import { UtilsManager } from "../classes/UtilsManager";
 import MarketCard from "../components/MarketCard";
 import type { Market } from "../types";
 
@@ -13,53 +14,29 @@ const MarketsPage: FC = () => {
   const [top3Markets, setTop3Markets] = useState<Market[]>([]);
 
   useEffect(() => {
-    setWinnerMarkets([
-      {
-        title: "Max Verstappen",
-        numerator: 3,
-        denominator: 1,
-        market_id: 1,
-      },
-      {
-        title: "Lewis Hamilton",
-        numerator: 5,
-        denominator: 2,
-        market_id: 2,
-      },
-      {
-        title: "Charles Leclerc",
-        numerator: 7,
-        denominator: 1,
-        market_id: 3,
-      },
-      {
-        title: "Lando Norris",
-        numerator: 12,
-        denominator: 1,
-        market_id: 4,
-      },
-    ]);
+    function parseMarketsData(keys: string[], data: any[][]): Market[] {
+      return data.map((data) => {
+        let market: any = {};
+        keys.forEach((key, index) => {
+          market[key] = data[index];
+        });
+        return market as Market;
+      });
+    }
 
-    setTop3Markets([
-      {
-        title: "Max Verstappen",
-        numerator: 1,
-        denominator: 4,
-        market_id: 5,
-      },
-      {
-        title: "Lewis Hamilton",
-        numerator: 1,
-        denominator: 2,
-        market_id: 6,
-      },
-      {
-        title: "Charles Leclerc",
-        numerator: 3,
-        denominator: 4,
-        market_id: 7,
-      },
-    ]);
+    async function fetchMarkets(): Promise<void> {
+      try {
+        const response = await fetch(UtilsManager.BASE_URL + "/markets");
+        const data = await response.json();
+
+        setWinnerMarkets(parseMarketsData(data.titles, data.winners));
+        setTop3Markets(parseMarketsData(data.titles, data.top3));
+      } catch (error) {
+        console.error("Error fetching markets:", error);
+      }
+    }
+
+    fetchMarkets();
   }, []);
 
   return (
