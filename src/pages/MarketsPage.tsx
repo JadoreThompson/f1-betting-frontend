@@ -1,6 +1,5 @@
 import {
   ArrowTrendingUpIcon,
-  Bars3Icon,
   ChartBarIcon,
   UserIcon,
 } from "@heroicons/react/24/outline";
@@ -8,10 +7,15 @@ import { useEffect, useState, type FC } from "react";
 import { UtilsManager } from "../classes/UtilsManager";
 import MarketCard from "../components/MarketCard";
 import type { Market } from "../types";
+import Header from "../components/Header";
 
 const MarketsPage: FC = () => {
   const [winnerMarkets, setWinnerMarkets] = useState<Market[]>([]);
   const [top3Markets, setTop3Markets] = useState<Market[]>([]);
+  const [totalVolume, setTotalVolume] = useState<bigint | undefined>(undefined);
+  const [activeBetCount, setActiveBetCount] = useState<bigint | undefined>(
+    undefined
+  );
 
   useEffect(() => {
     function parseMarketsData(keys: string[], data: any[][]): Market[] {
@@ -24,7 +28,7 @@ const MarketsPage: FC = () => {
       });
     }
 
-    async function fetchMarkets(): Promise<void> {
+    async function loadMarkets(): Promise<void> {
       try {
         const response = await fetch(UtilsManager.BASE_URL + "/markets");
         const data = await response.json();
@@ -36,58 +40,75 @@ const MarketsPage: FC = () => {
       }
     }
 
-    fetchMarkets();
+    loadMarkets();
   }, []);
+
+  // useEffect(() => {
+  //   const fetchVolume = async () => {
+  //     const bs = new BettingService();
+  //     await bs.connectToMetaMask();
+  //     const volume = await bs.fetchVolume();
+  //     setTotalVolume(volume);
+  //   };
+
+  //   fetchVolume();
+  // }, []);
+
+  useEffect(() => {
+    const fetchMarketSummary = async () => {
+      try {
+        const rsp = await fetch(UtilsManager.BASE_URL + "/markets/summary");
+        const d = await rsp.json();
+        setActiveBetCount(d.active_bets);
+        setTotalVolume(d.total_volume);
+      } catch (error) {}
+    };
+
+    fetchMarketSummary();
+  }, []);
+
+  function formatVolume(value: bigint): string {
+    const million = 1_000_000n;
+    const thousand = 1_000n;
+
+    const formatSmart = (num: number, suffix: string): string => {
+      return Math.round(num * 10) % 10 === 0
+        ? `${Math.round(num)}${suffix}`
+        : `${num.toFixed(1)}${suffix}`;
+    };
+
+    if (value >= million) {
+      const num = Number(value) / Number(million);
+      return value <= 10_000_000n
+        ? formatSmart(num, "M")
+        : `${Math.round(num)}M`;
+    } else if (value >= thousand) {
+      const num = Number(value) / Number(thousand);
+      return formatSmart(num, "K");
+    } else {
+      return value.toString().replace(/\B(?=(\d{3})+(?!\d))/g, ",");
+    }
+  }
+
+  function formatActiveBetCount(value: bigint): string {
+    const num = Number(value);
+    if (isNaN(num)) return "Invalid number";
+
+    if (value >= 1_000_000) {
+      return (num / 1_000_000).toFixed(1) + "M";
+    } else if (value >= 100_000n) {
+      return (num / 1_000).toFixed(0) + "K";
+    } else if (value > 10_000) {
+      return (num / 1_000).toFixed(1) + "K";
+    } else {
+      return num.toLocaleString();
+    }
+  }
 
   return (
     <div className="min-h-screen bg-gray-50">
       {/* Header */}
-      <header className="bg-white border-b border-gray-200 sticky top-0 z-50">
-        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
-          <div className="flex items-center justify-between h-16">
-            <div className="flex items-center gap-3">
-              <div className="text-2xl font-bold bg-gradient-to-r from-blue-600 to-purple-600 bg-clip-text text-transparent">
-                RaceBet
-              </div>
-              <div className="hidden sm:block text-sm text-gray-500">
-                Monaco Grand Prix 2025
-              </div>
-            </div>
-
-            <div className="flex items-center gap-4">
-              <div className="hidden md:flex items-center gap-6 text-sm">
-                <a
-                  href="#"
-                  className="text-gray-600 hover:text-gray-900 font-medium"
-                >
-                  Markets
-                </a>
-                <a
-                  href="#"
-                  className="text-gray-600 hover:text-gray-900 font-medium"
-                >
-                  Portfolio
-                </a>
-                <a
-                  href="#"
-                  className="text-gray-600 hover:text-gray-900 font-medium"
-                >
-                  Leaderboard
-                </a>
-              </div>
-
-              <div className="flex items-center gap-2">
-                <button className="p-2 text-gray-500 hover:text-gray-700 hover:bg-gray-100 rounded-lg transition-colors">
-                  <UserIcon className="w-5 h-5" />
-                </button>
-                <button className="p-2 text-gray-500 hover:text-gray-700 hover:bg-gray-100 rounded-lg transition-colors md:hidden">
-                  <Bars3Icon className="w-5 h-5" />
-                </button>
-              </div>
-            </div>
-          </div>
-        </div>
-      </header>
+      <Header />
 
       {/* Hero Section */}
       <div className="bg-gradient-to-br from-gray-900 via-blue-900 to-purple-900 text-white">
@@ -110,12 +131,19 @@ const MarketsPage: FC = () => {
               </p>
               <div className="flex items-center gap-4">
                 <div className="text-center">
-                  <div className="text-2xl font-bold">$2.4M</div>
+                  <div className="text-2xl font-bold">
+                    $
+                    {totalVolume !== undefined ? formatVolume(totalVolume) : ""}
+                  </div>
                   <div className="text-sm text-gray-400">Total Volume</div>
                 </div>
                 <div className="w-px h-12 bg-gray-600"></div>
                 <div className="text-center">
-                  <div className="text-2xl font-bold">1,247</div>
+                  <div className="text-2xl font-bold">
+                    {activeBetCount !== undefined
+                      ? formatActiveBetCount(activeBetCount)
+                      : ""}
+                  </div>
                   <div className="text-sm text-gray-400">Active Bets</div>
                 </div>
                 <div className="w-px h-12 bg-gray-600"></div>

@@ -25,7 +25,7 @@ const NETWORK_CONFIGS: Record<ChainId, NetworkConfig> = {
   [ChainId.SEPOLIA]: {
     name: "Sepolia Testnet",
     chainId: ChainId.SEPOLIA,
-    bettingEscrow: "0x0282593e4fEa9012052f8C17f9c12947C8957Af2",
+    bettingEscrow: "0x1eaB9910590855cD49ce890d0e0030E4CAee4B13",
     usdt: "0x0fe922d26fde4a9160bb2d145e851e2d9c2f3f84",
     blockExplorer: "https://sepolia.etherscan.io",
   },
@@ -63,6 +63,20 @@ const BETTING_ESCROW_ABI = [
     inputs: [],
     name: "usdtToken",
     outputs: [{ name: "", type: "address" }],
+    stateMutability: "view",
+    type: "function",
+  },
+  {
+    inputs: [],
+    name: "volume",
+    outputs: [{ name: "", type: "uint256" }],
+    stateMutability: "view",
+    type: "function",
+  },
+  {
+    inputs: [],
+    name: "activeBetCount",
+    outputs: [{ name: "", type: "uint256" }],
     stateMutability: "view",
     type: "function",
   },
@@ -143,6 +157,7 @@ interface SecurityValidation {
   isRateLimited: boolean;
 }
 
+// TODO: DRY and optimise.
 export class BettingService {
   private provider: any = null;
   private signer: ethers.Signer | null = null;
@@ -568,5 +583,23 @@ export class BettingService {
         isValid: false,
       };
     }
+  }
+
+  async fetchVolume(): Promise<bigint> {
+    if (!this.bettingContract || !this.usdtContract) {
+      throw new Error("Contracts not initialized");
+    }
+
+    const decimals: number = await this.usdtContract.decimals();
+    const volume: number = await this.bettingContract.volume();
+    return BigInt(volume) / BigInt(10) ** BigInt(decimals);
+  }
+
+  async fetchNumActiveBets(): Promise<bigint> {
+    if (!this.bettingContract || !this.usdtContract) {
+      throw new Error("Contracts not initialized");
+    }
+
+    return await this.bettingContract.activeBetCount();
   }
 }
