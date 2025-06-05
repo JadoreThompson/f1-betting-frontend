@@ -5,9 +5,10 @@ import {
 } from "@heroicons/react/24/outline";
 import { useEffect, useState, type FC } from "react";
 import { UtilsManager } from "../classes/UtilsManager";
+import Header from "../components/Header";
 import MarketCard from "../components/MarketCard";
 import type { Market } from "../types";
-import Header from "../components/Header";
+import { data } from "react-router";
 
 const MarketsPage: FC = () => {
   const [winnerMarkets, setWinnerMarkets] = useState<Market[]>([]);
@@ -32,7 +33,7 @@ const MarketsPage: FC = () => {
       try {
         const response = await fetch(UtilsManager.BASE_URL + "/markets");
         const data = await response.json();
-
+        // const data = loadMockMarkets();
         setWinnerMarkets(parseMarketsData(data.titles, data.winners));
         setTop3Markets(parseMarketsData(data.titles, data.top3));
       } catch (error) {
@@ -66,6 +67,42 @@ const MarketsPage: FC = () => {
 
     fetchMarketSummary();
   }, []);
+
+  function generateMockMarkets(count: number): Market[] {
+    const categories = ["top3", "winner"];
+
+    return Array.from({ length: count }, (_, i) => {
+      const title = `Market ${i}`;
+      const category = categories[i % categories.length];
+      const numerator = Math.floor(Math.random() * 90 + 10); // 10–99
+      const denominator = 100;
+      return {
+        title,
+        category,
+        numerator,
+        denominator,
+        market_id: i + 1,
+      };
+    });
+  }
+
+  function loadMockMarkets(): {
+    titles: string[];
+    winners: any[][];
+    top3: any[][];
+  } {
+    const markets = generateMockMarkets(20);
+    const titles = Object.keys(markets[0]);
+    const winners = markets.filter((m) => m.category == "winner");
+    const top3s = markets.filter((m) => m.category == "top3");
+    const data = {
+      titles,
+      winners: winners.map((wm) => Object.values(wm)),
+      top3: top3s.map((t3m) => Object.values(t3m)),
+    };
+
+    return data;
+  }
 
   function formatVolume(value: bigint): string {
     const million = 1_000_000n;
