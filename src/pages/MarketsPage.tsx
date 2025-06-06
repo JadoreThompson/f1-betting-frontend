@@ -8,7 +8,42 @@ import { UtilsManager } from "../classes/UtilsManager";
 import Header from "../components/Header";
 import MarketCard from "../components/MarketCard";
 import type { Market } from "../types";
-import { data } from "react-router";
+
+function generateMockMarkets(count: number): Market[] {
+  const categories = ["top3", "winner"];
+
+  return Array.from({ length: count }, (_, i) => {
+    const title = `Market ${i}`;
+    const category = categories[i % categories.length];
+    const numerator = Math.floor(Math.random() * 90 + 10); // 10–99
+    const denominator = 100;
+    return {
+      title,
+      category,
+      numerator,
+      denominator,
+      market_id: i + 1,
+    };
+  });
+}
+
+function loadMockMarkets(): {
+  titles: string[];
+  winners: any[][];
+  top3: any[][];
+} {
+  const markets = generateMockMarkets(20);
+  const titles = Object.keys(markets[0]);
+  const winners = markets.filter((m) => m.category == "winner");
+  const top3s = markets.filter((m) => m.category == "top3");
+  const data = {
+    titles,
+    winners: winners.map((wm) => Object.values(wm)),
+    top3: top3s.map((t3m) => Object.values(t3m)),
+  };
+
+  return data;
+}
 
 const MarketsPage: FC = () => {
   const [winnerMarkets, setWinnerMarkets] = useState<Market[]>([]);
@@ -44,19 +79,8 @@ const MarketsPage: FC = () => {
     loadMarkets();
   }, []);
 
-  // useEffect(() => {
-  //   const fetchVolume = async () => {
-  //     const bs = new BettingService();
-  //     await bs.connectToMetaMask();
-  //     const volume = await bs.fetchVolume();
-  //     setTotalVolume(volume);
-  //   };
-
-  //   fetchVolume();
-  // }, []);
-
   useEffect(() => {
-    const fetchMarketSummary = async () => {
+    const fetchMarketSummary = async (): Promise<void> => {
       try {
         const rsp = await fetch(UtilsManager.BASE_URL + "/markets/summary");
         const d = await rsp.json();
@@ -67,42 +91,6 @@ const MarketsPage: FC = () => {
 
     fetchMarketSummary();
   }, []);
-
-  function generateMockMarkets(count: number): Market[] {
-    const categories = ["top3", "winner"];
-
-    return Array.from({ length: count }, (_, i) => {
-      const title = `Market ${i}`;
-      const category = categories[i % categories.length];
-      const numerator = Math.floor(Math.random() * 90 + 10); // 10–99
-      const denominator = 100;
-      return {
-        title,
-        category,
-        numerator,
-        denominator,
-        market_id: i + 1,
-      };
-    });
-  }
-
-  function loadMockMarkets(): {
-    titles: string[];
-    winners: any[][];
-    top3: any[][];
-  } {
-    const markets = generateMockMarkets(20);
-    const titles = Object.keys(markets[0]);
-    const winners = markets.filter((m) => m.category == "winner");
-    const top3s = markets.filter((m) => m.category == "top3");
-    const data = {
-      titles,
-      winners: winners.map((wm) => Object.values(wm)),
-      top3: top3s.map((t3m) => Object.values(t3m)),
-    };
-
-    return data;
-  }
 
   function formatVolume(value: bigint): string {
     const million = 1_000_000n;

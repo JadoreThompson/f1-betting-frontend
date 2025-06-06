@@ -15,6 +15,7 @@ interface EnginePayload {
   side: Side;
   market_id: number;
   wallet_address: string;
+  txn_address: string;
 }
 
 const BettingSlipCard: FC<{
@@ -48,17 +49,13 @@ const BettingSlipCard: FC<{
     stake: number,
     numerator: number,
     denominator: number
-  ): number => {
-    return stake * (numerator / denominator);
-  };
+  ): number => stake * (numerator / denominator);
 
   const calculateTotalReturn = (
     stake: number,
     numerator: number,
     denominator: number
-  ): number => {
-    return stake + calculatePayout(stake, numerator, denominator);
-  };
+  ): number => stake + calculatePayout(stake, numerator, denominator);
 
   const numericAmount = parseFloat(amount) || 0;
 
@@ -104,14 +101,15 @@ const BettingSlipCard: FC<{
     }
 
     const bs = new BettingService();
-    const formData: EnginePayload = {
+    const formData = {
       amount: Number.parseFloat(amount),
       side: curSide,
       market_id: market.market_id,
       wallet_address: await bs.connectToMetaMask(),
-    };
+    } as EnginePayload;
 
     const result: BetResult = await bs.placeBet(market.market_id, "1000");
+    formData.txn_address = result.transactionHash!;
 
     if (!result.success) {
       setError("Failed to place bet. Please try again.");

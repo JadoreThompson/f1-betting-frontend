@@ -157,6 +157,20 @@ interface SecurityValidation {
   isRateLimited: boolean;
 }
 
+function CheckContractsInitialised<
+  T extends { bettingContract: any; usdtContract: any }
+>(target: any, propertyKey: string, descriptor: PropertyDescriptor): any {
+  const originalMethod = descriptor.value;
+
+  descriptor.value = function (this: T, ...args: any[]) {
+    if (!this.bettingContract || !this.usdtContract)
+      throw new Error("Contracts not initialised!");
+    return originalMethod.apply(this, args);
+  };
+
+  return descriptor;
+}
+
 // TODO: DRY and optimise.
 export class BettingService {
   private provider: any = null;
@@ -585,21 +599,20 @@ export class BettingService {
     }
   }
 
+  @CheckContractsInitialised
   async fetchVolume(): Promise<bigint> {
-    if (!this.bettingContract || !this.usdtContract) {
-      throw new Error("Contracts not initialized");
-    }
-
-    const decimals: number = await this.usdtContract.decimals();
-    const volume: number = await this.bettingContract.volume();
+    const decimals: number = await this.usdtContract!.decimals();
+    const volume: number = await this.bettingContract!.volume();
     return BigInt(volume) / BigInt(10) ** BigInt(decimals);
   }
 
+  @CheckContractsInitialised
   async fetchNumActiveBets(): Promise<bigint> {
-    if (!this.bettingContract || !this.usdtContract) {
-      throw new Error("Contracts not initialized");
-    }
+    return await this.bettingContract!.activeBetCount();
+  }
 
-    return await this.bettingContract.activeBetCount();
+  @CheckContractsInitialised
+  async fetchActivity() {
+    
   }
 }
