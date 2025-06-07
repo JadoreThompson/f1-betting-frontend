@@ -1,13 +1,12 @@
 import { ArrowTrendingUpIcon } from "@heroicons/react/24/outline";
-import { useState, type FC } from "react";
+import { type FC } from "react";
 import type { Market } from "../types";
-import BettingSlipCard from "./BettingSlipCard";
 
-const MarketCard: FC<{ market: Market; category: string }> = ({
-  market,
-  category,
-}) => {
-  const [showBetSlip, setShowBetSlip] = useState<boolean>(false);
+const MarketCard: FC<{
+  market: Market;
+  category: string;
+  setShowBetSlip: (arg: boolean) => void;
+}> = ({ market, category, setShowBetSlip }) => {
 
   const formatOdds = (numerator: number, denominator: number): string => {
     return `${numerator}/${denominator}`;
@@ -29,9 +28,6 @@ const MarketCard: FC<{ market: Market; category: string }> = ({
 
   return (
     <>
-      {showBetSlip && (
-        <BettingSlipCard market={market} setShow={setShowBetSlip} />
-      )}
       <div
         className="bg-white border border-gray-200 rounded-xl p-4 hover:shadow-lg transition-all duration-200 hover:border-blue-200 cursor-pointer group"
         onClick={() => setShowBetSlip(true)}
