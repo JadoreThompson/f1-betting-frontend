@@ -6,6 +6,7 @@ export async function handleAuthFormSubmit(
 ): Promise<void> {
   e.preventDefault();
   const body = Object.fromEntries(new FormData(e.currentTarget).entries());
+  console.log(body);
 
   try {
     const rsp = await fetch(UtilsManager.BASE_URL + `/auth/${authType}`, {
@@ -20,8 +21,6 @@ export async function handleAuthFormSubmit(
     if (!rsp.ok) {
       throw new Error(`Failed to ${authType}");`);
     }
-
-    window.location.href = "/";
   } catch (error) {
     console.error(`Error during ${authType}:`, error);
   }

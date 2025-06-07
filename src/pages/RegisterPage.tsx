@@ -6,9 +6,12 @@ import {
   LockClosedIcon,
 } from "@heroicons/react/24/outline";
 import { useState } from "react";
+import { useNavigate } from "react-router";
+import { useAuthStore } from "../stores/authStore";
 import { handleAuthFormSubmit } from "../utils";
 
 const RegisterPage = () => {
+  const { login } = useAuthStore();
   const [showPassword, setShowPassword] = useState<boolean>(false);
   const [rememberMe, setRememberMe] = useState<boolean>(false);
 
@@ -19,7 +22,11 @@ const RegisterPage = () => {
         <div className="bg-white rounded-2xl shadow-2xl border border-gray-200 overflow-hidden transition-all duration-300">
           <form
             className="p-6 space-y-4"
-            onSubmit={(e) => handleAuthFormSubmit(e, "register")}
+            onSubmit={async (e) => {
+              await handleAuthFormSubmit(e, "register");
+              login();
+              useNavigate()("/");
+            }}
           >
             {/* Email Field */}
             <div>
@@ -112,6 +119,12 @@ const RegisterPage = () => {
               <span>Register</span>
               <ArrowRightIcon className="w-5 h-5" />
             </button>
+            <span className="ml-2 text-sm text-gray-600">
+              Already have an account?{" "}
+              <a href="/login" className="text-sm text-blue-500">
+                Login
+              </a>
+            </span>
           </form>
         </div>
 

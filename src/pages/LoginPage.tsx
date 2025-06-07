@@ -5,13 +5,18 @@ import {
   EyeSlashIcon,
   LockClosedIcon,
 } from "@heroicons/react/24/outline";
-import { useState } from "react";
+import { useEffect, useState } from "react";
+import { useAuthStore } from "../stores/authStore";
 import { handleAuthFormSubmit } from "../utils";
+import { useNavigate } from "react-router";
 
 const LoginPage = () => {
+  const { login, isLoggedIn } = useAuthStore();
   const [showPassword, setShowPassword] = useState(false);
   const [password, setPassword] = useState("");
   const [rememberMe, setRememberMe] = useState(false);
+
+  useEffect(() => console.log("state change: ", isLoggedIn), [isLoggedIn]);
 
   return (
     <div className="min-h-screen bg-gradient-to-br from-blue-50 via-purple-50 to-pink-50 flex items-center justify-center p-4">
@@ -20,7 +25,11 @@ const LoginPage = () => {
         <div className="bg-white rounded-2xl shadow-2xl border border-gray-200 overflow-hidden transition-all duration-300">
           <form
             className="p-6 space-y-4"
-            onSubmit={(e) => handleAuthFormSubmit(e, "login")}
+            onSubmit={async (e) => {
+              await handleAuthFormSubmit(e, "login");
+              login();
+              useNavigate()("/");
+            }}
           >
             {/* Email Field */}
             <div>
@@ -54,7 +63,7 @@ const LoginPage = () => {
                   type={showPassword ? "text" : "password"}
                   value={password}
                   onChange={(e) => setPassword(e.target.value)}
-                    name="password"
+                  name="password"
                   placeholder="••••••••"
                   className="w-full pl-10 pr-12 py-3 border border-gray-300 rounded-xl focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-all"
                   required
@@ -94,6 +103,12 @@ const LoginPage = () => {
               <span>Sign In</span>
               <ArrowRightIcon className="w-5 h-5" />
             </button>
+            <span className="ml-2 text-sm text-gray-600">
+              Don't have an account?{" "}
+              <a href="/register" className="text-sm text-blue-500">
+                Register
+              </a>
+            </span>
           </form>
         </div>
 
