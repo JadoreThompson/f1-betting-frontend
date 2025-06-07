@@ -46,12 +46,35 @@ function loadMockMarkets(): {
 }
 
 const MarketsPage: FC = () => {
+  const [upcomingRace, setUpcomingRace] = useState<string | undefined>(
+    undefined
+  );
   const [winnerMarkets, setWinnerMarkets] = useState<Market[]>([]);
   const [top3Markets, setTop3Markets] = useState<Market[]>([]);
   const [totalVolume, setTotalVolume] = useState<bigint | undefined>(undefined);
   const [activeBetCount, setActiveBetCount] = useState<bigint | undefined>(
     undefined
   );
+
+  useEffect(() => {
+    const fetchNextRace = async () => {
+      try {
+        const rsp = await fetch(UtilsManager.BASE_URL + "/markets/upcoming");
+
+        if (rsp.ok) {
+          const d = await rsp.json();
+
+          if (d) {
+            setUpcomingRace(d.name);
+          }
+        }
+      } catch (error) {
+        console.error("Error fetching next race:", error);
+      }
+    };
+
+    fetchNextRace();
+  }, []);
 
   useEffect(() => {
     function parseMarketsData(keys: string[], data: any[][]): Market[] {
@@ -68,7 +91,6 @@ const MarketsPage: FC = () => {
       try {
         const response = await fetch(UtilsManager.BASE_URL + "/markets");
         const data = await response.json();
-        // const data = loadMockMarkets();
         setWinnerMarkets(parseMarketsData(data.titles, data.winners));
         setTop3Markets(parseMarketsData(data.titles, data.top3));
       } catch (error) {
@@ -145,7 +167,9 @@ const MarketsPage: FC = () => {
                 Live Event
               </div>
               <h1 className="text-4xl lg:text-5xl font-bold mb-4 leading-tight">
-                Monaco Grand Prix
+                {upcomingRace
+                  ? upcomingRace
+                  : `Upcoming Season ${new Date().getFullYear() + 1}`}
                 <span className="block text-2xl lg:text-3xl text-blue-300 font-normal mt-2">
                   Formula 1 Championship
                 </span>

@@ -5,7 +5,6 @@ import { useAuthStore } from "../stores/authStore";
 
 const Header: FC = () => {
   const { isLoggedIn } = useAuthStore();
-  console.log(isLoggedIn);
   const pathname = useLocation().pathname;
   const location = pathname.split("/")[1];
 
