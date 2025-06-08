@@ -9,6 +9,14 @@
   font-family: "Poppins", sans-serif;
 }
 
+.error {
+  color: red;
+}
+
+.success {
+  color: green;
+}
+
 .flex-center {
   display: flex;
   align-items: center;

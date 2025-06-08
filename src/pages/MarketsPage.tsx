@@ -8,7 +8,9 @@ import { UtilsManager } from "../classes/UtilsManager";
 import BettingSlipCard from "../components/BettingSlipCard";
 import Header from "../components/Header";
 import MarketCard from "../components/MarketCard";
+
 import type { Market } from "../types";
+import { Protected } from "../components/Protected";
 
 function generateMockMarkets(count: number): Market[] {
   const categories = ["top3", "winner"];
@@ -25,7 +27,7 @@ function generateMockMarkets(count: number): Market[] {
       denominator,
       market_id: i + 1,
       back_multiplier: numerator,
-      lay_multiplier: (10 - numerator) + 1
+      lay_multiplier: 10 - numerator + 1,
     };
   });
 }
@@ -93,7 +95,7 @@ const MarketsPage: FC = () => {
         });
 
         market.back_multiplier = market.numerator + 1;
-        market.lay_multiplier = (10 - market.numerator) + 1;
+        market.lay_multiplier = 10 - market.numerator + 1;
 
         return market as Market;
       });
@@ -167,11 +169,14 @@ const MarketsPage: FC = () => {
   return (
     <>
       {showBetSlip && currentMarket && (
-        <BettingSlipCard
-          market={currentMarket}
-          setShow={(arg: boolean) => {
-            setShowBetSlip(arg);
-            setCurrentMarket(undefined);
+        <Protected
+          Component={BettingSlipCard}
+          args={{
+            market: currentMarket,
+            setShow: (arg: boolean) => {
+              setShowBetSlip(arg);
+              setCurrentMarket(undefined);
+            },
           }}
         />
       )}

@@ -6,11 +6,12 @@ import {
   LockClosedIcon,
 } from "@heroicons/react/24/outline";
 import { useEffect, useState } from "react";
+import { useNavigate } from "react-router";
 import { useAuthStore } from "../stores/authStore";
 import { handleAuthFormSubmit } from "../utils";
-import { useNavigate } from "react-router";
 
 const LoginPage = () => {
+  const navigate = useNavigate();
   const { login, isLoggedIn } = useAuthStore();
   const [showPassword, setShowPassword] = useState(false);
   const [password, setPassword] = useState("");
@@ -28,7 +29,8 @@ const LoginPage = () => {
             onSubmit={async (e) => {
               await handleAuthFormSubmit(e, "login");
               login();
-              useNavigate()("/");
+              navigate("/");
+              console.log("aaa");
             }}
           >
             {/* Email Field */}

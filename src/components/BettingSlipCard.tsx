@@ -4,7 +4,7 @@ import {
   XMarkIcon,
 } from "@heroicons/react/24/outline";
 import { useEffect, useRef, useState, type FC, type JSX } from "react";
-import { BettingService, type BetResult, BettingError } from "../classes/BettingService";
+import { BettingService, type BetResult } from "../classes/BettingService";
 import { UtilsManager } from "../classes/UtilsManager";
 import type { Market } from "../types";
 
@@ -22,12 +22,17 @@ const BettingSlipCard: FC<{
   market: Market;
   setShow: (arg: boolean) => void;
 }> = ({ market, setShow }) => {
+  const DEFAULT_METAMODAL_MSG = "Please confirm the connection in your wallet";
   const [curSide, setSide] = useState<Side>("back");
   const [amount, setAmount] = useState("");
   const [isVisible, setIsVisible] = useState(false);
   const [isClosing, setIsClosing] = useState(false);
+  const [showMetaMaskModal, setShowMetaMaskModal] = useState<boolean>(false);
+  const [metaMaskModalMessage, setMetaMaskModalMessage] = useState<string>(
+    DEFAULT_METAMODAL_MSG
+  );
   const [error, setError] = useState<string | null>(null);
-  const [isConnectingMM, setIsConnectingMM] = useState<boolean>(false);
+  const [success, setSuccess] = useState<string | null>(null);
   const formRef = useRef<HTMLFormElement>(null);
 
   useEffect(() => {
@@ -61,7 +66,7 @@ const BettingSlipCard: FC<{
   });
 
   const numericAmount = parseFloat(amount) || 0;
-  const payout = calculatePayout(numericAmount);
+  const payout = Object.freeze(calculatePayout(numericAmount));
 
   const sanitizeInput = (value: string) => /^\d*\.?\d*$/.test(value.trim());
 
@@ -79,13 +84,13 @@ const BettingSlipCard: FC<{
       if (!rsp.ok) throw new Error(`An error occured ${rsp.status}`);
       return true;
     } catch (error) {
-      setError("Failed to send bet to engine. Please try again.");
-      return false;
+      throw new Error("Failed to send bet to engine. Please try again.");
     }
   }
 
   async function handleFormSubmit(e: React.FormEvent): Promise<void> {
     e.preventDefault();
+    setError(null);
 
     if (!sanitizeInput(amount)) {
       setError("Please enter a valid amount.");
@@ -94,7 +99,7 @@ const BettingSlipCard: FC<{
     }
 
     try {
-      setIsConnectingMM(true);
+      setShowMetaMaskModal(true);
       const bs = new BettingService();
 
       const formData = {
@@ -104,210 +109,232 @@ const BettingSlipCard: FC<{
         wallet_address: await bs.connectToMetaMask(),
       } as EnginePayload;
 
+      setMetaMaskModalMessage("Confirm contract to place bet");
+
       const result: BetResult = await bs.placeBet(market.market_id, "1000");
-      formData.txn_address = result.transactionHash!;
 
       if (!result.success) {
-        setError("Failed to place bet. Please try again.");
+        setError(result.error!.message);
         return;
       }
 
+      formData.txn_address = result.transactionHash!;
       await sendToEngine(formData);
+      setSuccess("Bet placed successfully");
+
       handleClose();
     } catch (error) {
-      if (error instanceof BettingError) {
-        setError(error.message);
-      }
+      setError((error as Error).message);
     } finally {
-      setIsConnectingMM(false);
+      setShowMetaMaskModal(false);
+      setMetaMaskModalMessage(DEFAULT_METAMODAL_MSG);
     }
   }
 
   function renderCardContent(): JSX.Element {
     return (
       <>
-        <div className="flex justify-end p-1">
+        <div className="relative">
           <button
             onClick={handleClose}
-            className="p-1 hover:bg-white/20 rounded-lg transition-colors hover:cursor-pointer"
+            className="absolute right-0 top-2 hover:cursor-pointer"
           >
             <XMarkIcon className="w-7 h-7" />
           </button>
-        </div>
 
-        {/* Market Info */}
-        <div className="p-4 border-b border-gray-200">
-          <div className="flex items-center gap-3">
-            <div className="w-10 h-10 bg-gradient-to-br from-blue-500 to-purple-600 rounded-full flex items-center justify-center">
-              <span className="text-white text-sm font-bold">MV</span>
-            </div>
-            <div className="flex-1">
-              <h4 className="font-semibold text-gray-900">{market.title}</h4>
-              <p className="text-sm text-gray-500">category</p>
-            </div>
-            <div className="text-right">
-              <div className="bg-white px-3 py-1 rounded-lg border border-gray-200">
-                <span className="text-lg font-mono font-bold text-gray-900">
-                  {formatOdds(market.numerator, market.denominator)}
-                </span>
+          {/* Market Info */}
+          <div className="p-4 border-b border-gray-200">
+            <div className="flex items-center gap-3">
+              <div className="w-10 h-10 bg-gradient-to-br from-blue-500 to-purple-600 rounded-full flex items-center justify-center">
+                <span className="text-white text-sm font-bold">MV</span>
+              </div>
+              <div className="w-fit ">
+                <h4 className="font-semibold text-gray-900">{market.title}</h4>
+                <p className="text-sm text-gray-500">category</p>
+              </div>
+              <div className="text-right">
+                <div className="bg-white px-3 py-1 rounded-lg border border-gray-200">
+                  <span className="text-lg font-mono font-bold text-gray-900">
+                    {formatOdds(market.numerator, market.denominator)}
+                  </span>
+                </div>
               </div>
             </div>
           </div>
-        </div>
 
-        {/* Bet Type Selection */}
-        <div className="p-4">
-          <div className="mb-4">
-            <label className="block text-sm font-medium text-gray-700 mb-2">
-              Bet Type
-            </label>
-            <div className="grid grid-cols-2 gap-2">
-              <button
-                type="button"
-                onClick={() => setSide("back")}
-                className={`p-3 rounded-xl border-2 transition-all duration-200 flex items-center justify-center gap-2 ${
-                  curSide === "back"
-                    ? "border-green-500 bg-green-50 text-green-700"
-                    : "border-gray-200 hover:border-gray-300 text-gray-600"
-                }`}
-              >
-                <ArrowTrendingUpIcon className="w-5 h-5" />
-                <div className="text-left">
-                  <div className="font-semibold">Back</div>
-                  <div className="text-xs opacity-75">Bet on win</div>
-                </div>
-              </button>
-
-              <button
-                onClick={() => setSide("lay")}
-                className={`p-3 rounded-xl border-2 transition-all duration-200 flex items-center justify-center gap-2 ${
-                  curSide === "lay"
-                    ? "border-purple-500 bg-red-50 text-purple-700"
-                    : "border-gray-200 hover:border-gray-300 text-gray-600"
-                }`}
-              >
-                <ArrowTrendingDownIcon className="w-5 h-5" />
-                <div className="text-left">
-                  <div className="font-semibold">Lay</div>
-                  <div className="text-xs opacity-75">Bet against</div>
-                </div>
-              </button>
-            </div>
-          </div>
-          <form ref={formRef} onSubmit={handleFormSubmit}>
-            {/* Amount Input */}
+          {/* Bet Type Selection */}
+          <div className="p-4">
             <div className="mb-4">
               <label className="block text-sm font-medium text-gray-700 mb-2">
-                Stake Amount
+                Bet Type
               </label>
-              <div className="relative">
-                <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
-                  <span className="text-gray-500 text-lg">$</span>
-                </div>
-                <input
-                  type="number"
-                  value={amount}
-                  onChange={(e) => {
-                    const value = e.target.value;
-                    if (!sanitizeInput(value)) {
-                      setError("Please enter a valid amount.");
-                    } else {
-                      setError(null);
-                      setAmount(value);
-                    }
-                  }}
-                  name="amount"
-                  placeholder="0.00"
-                  className="w-full pl-8 pr-4 py-3 border border-gray-300 rounded-xl text-lg font-semibold focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-all"
-                />
-              </div>
+              <div className="grid grid-cols-2 gap-2">
+                <button
+                  type="button"
+                  onClick={() => setSide("back")}
+                  className={`p-3 rounded-xl border-2 transition-all duration-200 flex items-center justify-center gap-2 ${
+                    curSide === "back"
+                      ? "border-green-500 bg-green-50 text-green-700"
+                      : "border-gray-200 hover:border-gray-300 text-gray-600"
+                  }`}
+                >
+                  <ArrowTrendingUpIcon className="w-5 h-5" />
+                  <div className="text-left">
+                    <div className="font-semibold">Back</div>
+                    <div className="text-xs opacity-75">Bet on win</div>
+                  </div>
+                </button>
 
-              {/* Quick Amount Buttons */}
-              <div className="flex gap-2 mt-2">
-                {[10, 25, 50, 100].map((quickAmount) => (
-                  <button
-                    type="button"
-                    key={quickAmount}
-                    onClick={() => setAmount(quickAmount.toString())}
-                    className="flex-1 py-2 px-3 text-sm border border-gray-200 rounded-lg hover:bg-gray-50 transition-colors"
-                  >
-                    ${quickAmount}
-                  </button>
-                ))}
+                <button
+                  onClick={() => setSide("lay")}
+                  className={`p-3 rounded-xl border-2 transition-all duration-200 flex items-center justify-center gap-2 ${
+                    curSide === "lay"
+                      ? "border-purple-500 bg-purple-50 text-purple-700"
+                      : "border-gray-200 hover:border-gray-300 text-gray-600"
+                  }`}
+                >
+                  <ArrowTrendingDownIcon className="w-5 h-5" />
+                  <div className="text-left">
+                    <div className="font-semibold">Lay</div>
+                    <div className="text-xs opacity-75">Bet against</div>
+                  </div>
+                </button>
               </div>
             </div>
+            <form ref={formRef} onSubmit={handleFormSubmit}>
+              {/* Amount Input */}
+              <div className="mb-4">
+                <label className="block text-sm font-medium text-gray-700 mb-2">
+                  Stake Amount
+                </label>
+                <div className="relative">
+                  <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
+                    <span className="text-gray-500 text-lg">$</span>
+                  </div>
+                  <input
+                    type="number"
+                    value={amount}
+                    onChange={(e) => {
+                      const value = e.target.value;
+                      if (!sanitizeInput(value)) {
+                        setError("Please enter a valid amount.");
+                      } else {
+                        setError(null);
+                        setAmount(value);
+                      }
+                    }}
+                    name="amount"
+                    placeholder="0.00"
+                    className="w-full pl-8 pr-4 py-3 border border-gray-300 rounded-xl text-lg font-semibold focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-all"
+                  />
+                </div>
 
-            {/* Calculation Display */}
-            {numericAmount > 0 && (
-              <div className="mb-4 p-4 bg-gray-50 rounded-xl border border-gray-200">
-                <div className="space-y-2 text-sm">
-                  <div className="flex justify-between">
-                    <span className="text-gray-600">Stake:</span>
-                    <span className="font-semibold">
-                      ${numericAmount.toFixed(2)}
-                    </span>
-                  </div>
-                  <div className="flex justify-between">
-                    <span className="text-gray-600">Potential Profit:</span>
-                    <span className="text-purple-600 font-semibold">
-                      ${payout[curSide].toFixed(2)}
-                    </span>
-                  </div>
-                  <div className="flex justify-between pt-2 border-t border-gray-200">
-                    <span className="text-gray-900 font-medium">
-                      {curSide === "back" ? "Total Return:" : "Max Liability:"}
-                    </span>
-                    <span className="font-bold text-lg">
-                      $ {payout[curSide].toFixed(2)}
-                    </span>
-                  </div>
+                {/* Quick Amount Buttons */}
+                <div className="flex gap-2 mt-2">
+                  {[10, 25, 50, 100].map((quickAmount) => (
+                    <button
+                      type="button"
+                      key={quickAmount}
+                      onClick={() => setAmount(quickAmount.toString())}
+                      className="flex-1 py-2 px-3 text-sm border border-gray-200 rounded-lg hover:bg-gray-50 transition-colors"
+                    >
+                      ${quickAmount}
+                    </button>
+                  ))}
                 </div>
               </div>
-            )}
 
-            {error && (
-              <div className="px-4 py-3 bg-gray-50 border-t border-gray-200">
-                <p className="text-xs text-gray-500 text-center">{error}</p>
+              {/* Calculation Display */}
+              {numericAmount > 0 && (
+                <div className="mb-4 p-4 bg-gray-50 rounded-xl border border-gray-200">
+                  <div className="space-y-2 text-sm">
+                    <div className="flex justify-between">
+                      <span className="text-gray-600">Stake:</span>
+                      <span className="font-semibold">
+                        ${numericAmount.toFixed(2)}
+                      </span>
+                    </div>
+                    <div className="flex justify-between">
+                      <span className="text-gray-600">Potential Profit:</span>
+                      <span
+                        className={`font-semibold ${
+                          curSide === "back"
+                            ? "text-green-600"
+                            : "text-purple-600"
+                        }`}
+                      >
+                        ${payout[curSide].toFixed(2)}
+                      </span>
+                    </div>
+                    <div className="flex justify-between pt-2 border-t border-gray-200">
+                      <span className="text-gray-900 font-medium">
+                        {curSide === "back"
+                          ? "Total Return:"
+                          : "Max Liability:"}
+                      </span>
+                      <span className="font-bold text-lg">
+                        $ {payout[curSide].toFixed(2)}
+                      </span>
+                    </div>
+                  </div>
+                </div>
+              )}
+
+              {error && (
+                <div className="px-4 py-3">
+                  <p className="text-sm font-normal error text-center">
+                    {error}
+                  </p>
+                </div>
+              )}
+
+              {success && (
+                <div className="px-4 py-3">
+                  <p className="text-sm font-normal success text-center">
+                    {success}
+                  </p>
+                </div>
+              )}
+
+              {/* Action Buttons */}
+              <div className="space-y-2">
+                <button
+                  type="submit"
+                  disabled={!numericAmount || numericAmount <= 0}
+                  className={`w-full py-4 px-6 rounded-xl font-semibold text-lg transition-all duration-200 hover:cursor-pointer ${
+                    curSide === "back"
+                      ? "bg-green-600 hover:bg-green-700 disabled:bg-gray-300 text-white"
+                      : "bg-purple-600 hover:bg-purple-700 disabled:bg-gray-300 text-white"
+                  }`}
+                >
+                  {numericAmount > 0 ? (
+                    <>
+                      Place {curSide === "back" ? "Back" : "Lay"} Bet - $
+                      {numericAmount.toFixed(2)}
+                    </>
+                  ) : (
+                    "Enter Amount to Continue"
+                  )}
+                </button>
+
+                <button
+                  type="button"
+                  onClick={handleClose}
+                  className="w-full py-3 px-6 border border-gray-300 rounded-xl font-medium text-gray-700 hover:bg-gray-50 transition-colors hover:cursor-pointer"
+                >
+                  Cancel
+                </button>
               </div>
-            )}
+            </form>
+          </div>
 
-            {/* Action Buttons */}
-            <div className="space-y-2">
-              <button
-                type="submit"
-                disabled={!numericAmount || numericAmount <= 0}
-                className={`w-full py-4 px-6 rounded-xl font-semibold text-lg transition-all duration-200 hover:cursor-pointer ${
-                  curSide === "back"
-                    ? "bg-green-600 hover:bg-green-700 disabled:bg-gray-300 text-white"
-                    : "bg-purple-600 hover:bg-purple-700 disabled:bg-gray-300 text-white"
-                }`}
-              >
-                {numericAmount > 0 ? (
-                  <>
-                    Place {curSide === "back" ? "Back" : "Lay"} Bet - $
-                    {numericAmount.toFixed(2)}
-                  </>
-                ) : (
-                  "Enter Amount to Continue"
-                )}
-              </button>
-
-              <button
-                type="button"
-                onClick={handleClose}
-                className="w-full py-3 px-6 border border-gray-300 rounded-xl font-medium text-gray-700 hover:bg-gray-50 transition-colors hover:cursor-pointer"
-              >
-                Cancel
-              </button>
-            </div>
-          </form>
-        </div>
-
-        {/* Footer */}
-        <div className="px-4 py-3 bg-gray-50 border-t border-gray-200 pb-25 md:pb-3">
-          <p className="text-xs text-gray-500 text-center">
-            Bets are final once placed. Please review your selection carefully.
-          </p>
+          {/* Footer */}
+          <div className="px-4 py-3 bg-gray-50 border-t border-gray-200 pb-25 md:pb-3">
+            <p className="text-xs text-gray-500 text-center">
+              Bets are final once placed. Please review your selection
+              carefully.
+            </p>
+          </div>
         </div>
       </>
     );
@@ -315,7 +342,7 @@ const BettingSlipCard: FC<{
 
   return (
     <>
-      {isConnectingMM && (
+      {showMetaMaskModal && (
         <div className="w-full h-screen fixed top-0 left-0 flex items-center justify-center bg-black/30 backdrop-blur-sm z-101">
           <div className="w-80 h-80 flex items-center justify-center flex-col relative border border-gray-200 rounded-3xl bg-white shadow-2xl p-8">
             <div className="relative z-10 mb-6">
@@ -328,11 +355,9 @@ const BettingSlipCard: FC<{
 
             <div className="text-center space-y-2 relative z-10">
               <h3 className="text-lg font-semibold text-gray-900">
-                Connecting to MetaMask
+                {metaMaskModalMessage}
               </h3>
-              <p className="text-sm text-gray-500">
-                Please confirm the connection in your wallet
-              </p>
+              <p className="text-sm text-gray-500"></p>
               <div className="flex items-center justify-center space-x-1 mt-4">
                 <div className="w-2 h-2 bg-blue-500 rounded-full animate-bounce"></div>
                 <div
@@ -368,7 +393,7 @@ const BettingSlipCard: FC<{
               : "-translate-y-full opacity-0"
           }`}
         >
-          <div className="max-w-md bg-white rounded-2xl shadow-2xl border border-gray-200 overflow-hidden">
+          <div className="max-w-md max-h-176 rounded-2xl shadow-2xl border border-gray-200 bg-white overflow-hidden overflow-y-scroll">
             {renderCardContent()}
           </div>
         </div>

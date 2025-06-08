@@ -1,12 +1,15 @@
 import { ArrowTrendingUpIcon } from "@heroicons/react/24/outline";
 import { type FC } from "react";
 import type { Market } from "../types";
+import { useAuthStore } from "../stores/authStore";
+import { useNavigate } from "react-router";
 
 const MarketCard: FC<{
   market: Market;
   category: string;
   setShowBetSlip: (arg: boolean) => void;
 }> = ({ market, category, setShowBetSlip }) => {
+  const { isLoggedIn } = useAuthStore();
 
   const formatOdds = (numerator: number, denominator: number): string => {
     return `${numerator}/${denominator}`;
