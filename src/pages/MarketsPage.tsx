@@ -24,6 +24,8 @@ function generateMockMarkets(count: number): Market[] {
       numerator,
       denominator,
       market_id: i + 1,
+      back_multiplier: numerator,
+      lay_multiplier: (10 - numerator) + 1
     };
   });
 }
@@ -84,10 +86,15 @@ const MarketsPage: FC = () => {
   useEffect(() => {
     function parseMarketsData(keys: string[], data: any[][]): Market[] {
       return data.map((data) => {
-        let market: any = {};
+        let market: any = {} as any as Market;
+
         keys.forEach((key, index) => {
           market[key] = data[index];
         });
+
+        market.back_multiplier = market.numerator + 1;
+        market.lay_multiplier = (10 - market.numerator) + 1;
+
         return market as Market;
       });
     }

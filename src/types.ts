@@ -4,4 +4,7 @@ export interface Market {
   numerator: number;
   denominator: number;
   market_id: number;
+  back_multiplier: number;
+  lay_multiplier: number;
 }
+

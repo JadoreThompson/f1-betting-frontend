@@ -181,7 +181,7 @@ const PortfolioPage: FC = () => {
   );
   const [user, setUser] = useState<UserStats>({} as UserStats);
   const [page, setPage] = useState<number>(1);
-  const [loading, setLoading] = useState<boolean>(false);
+  const [isLoading, setIsLoading] = useState<boolean>(false);
   const [positionsPagination, setPositionsPagination] =
     useState<PaginationInfo>({
       current_page: 1,
@@ -224,7 +224,7 @@ const PortfolioPage: FC = () => {
         }
       }
 
-      setLoading(true);
+      setIsLoading(true);
 
       try {
         // Simulate API delay
@@ -257,7 +257,7 @@ const PortfolioPage: FC = () => {
         console.error("Error loading positions:", error);
         setPositions(undefined);
       } finally {
-        setLoading(false);
+        setIsLoading(false);
       }
     };
 
@@ -283,7 +283,7 @@ const PortfolioPage: FC = () => {
         }
       }
 
-      setLoading(true);
+      setIsLoading(true);
 
       try {
         // Simulate API delay
@@ -317,7 +317,7 @@ const PortfolioPage: FC = () => {
         console.error("Error loading activities:", error);
         setActivities(undefined);
       } finally {
-        setLoading(false);
+        setIsLoading(false);
       }
     };
 
@@ -418,9 +418,9 @@ const PortfolioPage: FC = () => {
         <div className="flex items-center space-x-2">
           <button
             onClick={() => handlePageChange(currentPage - 1)}
-            disabled={!hasPrev || loading}
+            disabled={!hasPrev || isLoading}
             className={`flex items-center px-3 py-2 text-sm font-medium rounded-md transition-colors ${
-              !hasPrev || loading
+              !hasPrev || isLoading
                 ? "text-gray-400 cursor-not-allowed"
                 : "text-gray-700 hover:bg-gray-100 hover:text-gray-900"
             }`}
@@ -447,12 +447,12 @@ const PortfolioPage: FC = () => {
                 <button
                   key={pageNum}
                   onClick={() => handlePageChange(pageNum)}
-                  disabled={loading}
+                  disabled={isLoading}
                   className={`px-3 py-2 text-sm font-medium rounded-md transition-colors ${
                     pageNum === currentPage
                       ? "bg-blue-500 text-white"
                       : "text-gray-700 hover:bg-gray-100"
-                  } ${loading ? "cursor-not-allowed opacity-50" : ""}`}
+                  } ${isLoading ? "cursor-not-allowed opacity-50" : ""}`}
                 >
                   {pageNum}
                 </button>
@@ -462,9 +462,9 @@ const PortfolioPage: FC = () => {
 
           <button
             onClick={() => handlePageChange(currentPage + 1)}
-            disabled={!hasNext || loading}
+            disabled={!hasNext || isLoading}
             className={`flex items-center px-3 py-2 text-sm font-medium rounded-md transition-colors ${
-              !hasNext || loading
+              !hasNext || isLoading
                 ? "text-gray-400 cursor-not-allowed"
                 : "text-gray-700 hover:bg-gray-100 hover:text-gray-900"
             }`}
@@ -566,7 +566,7 @@ const PortfolioPage: FC = () => {
                     : "border-transparent text-gray-500 hover:text-gray-700 hover:border-blue-300"
                 }`}
                 onClick={() => handleTabChange("positions")}
-                disabled={loading}
+                disabled={isLoading}
               >
                 Positions
               </button>
@@ -577,7 +577,7 @@ const PortfolioPage: FC = () => {
                     : "border-transparent text-gray-500 hover:text-gray-700 hover:border-blue-300"
                 }`}
                 onClick={() => handleTabChange("activity")}
-                disabled={loading}
+                disabled={isLoading}
               >
                 Activity
               </button>
@@ -585,7 +585,7 @@ const PortfolioPage: FC = () => {
 
             {/* Table */}
             <div className="overflow-x-auto">
-              {loading ? (
+              {isLoading ? (
                 <div className="flex items-center justify-center py-8">
                   <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-500"></div>
                   <span className="ml-2 text-gray-600">Loading...</span>

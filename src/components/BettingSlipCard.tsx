@@ -4,7 +4,7 @@ import {
   XMarkIcon,
 } from "@heroicons/react/24/outline";
 import { useEffect, useRef, useState, type FC, type JSX } from "react";
-import { BettingService, type BetResult } from "../classes/BettingService";
+import { BettingService, type BetResult, BettingError } from "../classes/BettingService";
 import { UtilsManager } from "../classes/UtilsManager";
 import type { Market } from "../types";
 
@@ -27,11 +27,21 @@ const BettingSlipCard: FC<{
   const [isVisible, setIsVisible] = useState(false);
   const [isClosing, setIsClosing] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [isConnectingMM, setIsConnectingMM] = useState<boolean>(false);
   const formRef = useRef<HTMLFormElement>(null);
 
   useEffect(() => {
     const timer = setTimeout(() => setIsVisible(true), 50);
     return () => clearTimeout(timer);
+  }, []);
+
+  useEffect(() => {
+    const handle = () => document.body.classList.toggle("overflow-hidden");
+    handle();
+
+    return () => {
+      handle();
+    };
   }, []);
 
   const handleClose = (): void => {
@@ -45,31 +55,13 @@ const BettingSlipCard: FC<{
     return `${numerator}/${denominator}`;
   };
 
-  const calculatePayout = (
-    stake: number,
-    numerator: number,
-    denominator: number
-  ): number => stake * (numerator / denominator);
-
-  const calculateTotalReturn = (
-    stake: number,
-    numerator: number,
-    denominator: number
-  ): number => stake + calculatePayout(stake, numerator, denominator);
+  const calculatePayout = (stake: number): { back: number; lay: number } => ({
+    back: stake * market.back_multiplier,
+    lay: stake * market.lay_multiplier,
+  });
 
   const numericAmount = parseFloat(amount) || 0;
-
-  const payout = calculatePayout(
-    numericAmount,
-    market.numerator,
-    market.denominator
-  );
-
-  const totalReturn = calculateTotalReturn(
-    numericAmount,
-    market.numerator,
-    market.denominator
-  );
+  const payout = calculatePayout(numericAmount);
 
   const sanitizeInput = (value: string) => /^\d*\.?\d*$/.test(value.trim());
 
@@ -94,30 +86,41 @@ const BettingSlipCard: FC<{
 
   async function handleFormSubmit(e: React.FormEvent): Promise<void> {
     e.preventDefault();
+
     if (!sanitizeInput(amount)) {
       setError("Please enter a valid amount.");
       (e.target as HTMLFormElement).reset();
       return;
     }
 
-    const bs = new BettingService();
-    const formData = {
-      amount: Number.parseFloat(amount),
-      side: curSide,
-      market_id: market.market_id,
-      wallet_address: await bs.connectToMetaMask(),
-    } as EnginePayload;
+    try {
+      setIsConnectingMM(true);
+      const bs = new BettingService();
 
-    const result: BetResult = await bs.placeBet(market.market_id, "1000");
-    formData.txn_address = result.transactionHash!;
+      const formData = {
+        amount: Number.parseFloat(amount),
+        side: curSide,
+        market_id: market.market_id,
+        wallet_address: await bs.connectToMetaMask(),
+      } as EnginePayload;
 
-    if (!result.success) {
-      setError("Failed to place bet. Please try again.");
-      return;
+      const result: BetResult = await bs.placeBet(market.market_id, "1000");
+      formData.txn_address = result.transactionHash!;
+
+      if (!result.success) {
+        setError("Failed to place bet. Please try again.");
+        return;
+      }
+
+      await sendToEngine(formData);
+      handleClose();
+    } catch (error) {
+      if (error instanceof BettingError) {
+        setError(error.message);
+      }
+    } finally {
+      setIsConnectingMM(false);
     }
-
-    await sendToEngine(formData);
-    handleClose();
   }
 
   function renderCardContent(): JSX.Element {
@@ -179,7 +182,7 @@ const BettingSlipCard: FC<{
                 onClick={() => setSide("lay")}
                 className={`p-3 rounded-xl border-2 transition-all duration-200 flex items-center justify-center gap-2 ${
                   curSide === "lay"
-                    ? "border-red-500 bg-red-50 text-red-700"
+                    ? "border-purple-500 bg-red-50 text-purple-700"
                     : "border-gray-200 hover:border-gray-300 text-gray-600"
                 }`}
               >
@@ -245,17 +248,9 @@ const BettingSlipCard: FC<{
                     </span>
                   </div>
                   <div className="flex justify-between">
-                    <span className="text-gray-600">
-                      {curSide === "back"
-                        ? "Potential Profit:"
-                        : "Potential Loss:"}
-                    </span>
-                    <span
-                      className={`font-semibold ${
-                        curSide === "back" ? "text-green-600" : "text-red-600"
-                      }`}
-                    >
-                      ${payout.toFixed(2)}
+                    <span className="text-gray-600">Potential Profit:</span>
+                    <span className="text-purple-600 font-semibold">
+                      ${payout[curSide].toFixed(2)}
                     </span>
                   </div>
                   <div className="flex justify-between pt-2 border-t border-gray-200">
@@ -263,10 +258,7 @@ const BettingSlipCard: FC<{
                       {curSide === "back" ? "Total Return:" : "Max Liability:"}
                     </span>
                     <span className="font-bold text-lg">
-                      $
-                      {curSide === "back"
-                        ? totalReturn.toFixed(2)
-                        : payout.toFixed(2)}
+                      $ {payout[curSide].toFixed(2)}
                     </span>
                   </div>
                 </div>
@@ -287,7 +279,7 @@ const BettingSlipCard: FC<{
                 className={`w-full py-4 px-6 rounded-xl font-semibold text-lg transition-all duration-200 hover:cursor-pointer ${
                   curSide === "back"
                     ? "bg-green-600 hover:bg-green-700 disabled:bg-gray-300 text-white"
-                    : "bg-red-600 hover:bg-red-700 disabled:bg-gray-300 text-white"
+                    : "bg-purple-600 hover:bg-purple-700 disabled:bg-gray-300 text-white"
                 }`}
               >
                 {numericAmount > 0 ? (
@@ -312,7 +304,7 @@ const BettingSlipCard: FC<{
         </div>
 
         {/* Footer */}
-        <div className="px-4 py-3 bg-gray-50 border-t border-gray-200">
+        <div className="px-4 py-3 bg-gray-50 border-t border-gray-200 pb-25 md:pb-3">
           <p className="text-xs text-gray-500 text-center">
             Bets are final once placed. Please review your selection carefully.
           </p>
@@ -321,17 +313,42 @@ const BettingSlipCard: FC<{
     );
   }
 
-  useEffect(() => {
-    const handle = () => document.body.classList.toggle("overflow-hidden");
-    handle();
-
-    return () => {
-      handle();
-    };
-  }, []);
-
   return (
     <>
+      {isConnectingMM && (
+        <div className="w-full h-screen fixed top-0 left-0 flex items-center justify-center bg-black/30 backdrop-blur-sm z-101">
+          <div className="w-80 h-80 flex items-center justify-center flex-col relative border border-gray-200 rounded-3xl bg-white shadow-2xl p-8">
+            <div className="relative z-10 mb-6">
+              <img
+                src="/src/assets/images/MetaMask_Fox.png"
+                alt="MetaMask Fox"
+                className="w-16 h-16 object-contain"
+              />
+            </div>
+
+            <div className="text-center space-y-2 relative z-10">
+              <h3 className="text-lg font-semibold text-gray-900">
+                Connecting to MetaMask
+              </h3>
+              <p className="text-sm text-gray-500">
+                Please confirm the connection in your wallet
+              </p>
+              <div className="flex items-center justify-center space-x-1 mt-4">
+                <div className="w-2 h-2 bg-blue-500 rounded-full animate-bounce"></div>
+                <div
+                  className="w-2 h-2 bg-blue-500 rounded-full animate-bounce"
+                  style={{ animationDelay: "0.1s" }}
+                ></div>
+                <div
+                  className="w-2 h-2 bg-blue-500 rounded-full animate-bounce"
+                  style={{ animationDelay: "0.2s" }}
+                ></div>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+
       <div className="w-screen h-screen fixed top-0 left-0 z-100 backdrop-blur-xs">
         {/* Backdrop for mobile */}
         <div
