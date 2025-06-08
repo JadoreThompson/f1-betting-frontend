@@ -9,8 +9,8 @@ import BettingSlipCard from "../components/BettingSlipCard";
 import Header from "../components/Header";
 import MarketCard from "../components/MarketCard";
 
-import type { Market } from "../types";
 import { Protected } from "../components/Protected";
+import type { Market } from "../types";
 
 function generateMockMarkets(count: number): Market[] {
   const categories = ["top3", "winner"];
@@ -50,10 +50,19 @@ function loadMockMarkets(): {
   return data;
 }
 
+interface OverviewInfo {
+  most_backed_title: string;
+  latest_bet_amount: number;
+  latest_bet_title: string;
+}
+
 const MarketsPage: FC = () => {
   const [upcomingRace, setUpcomingRace] = useState<string | undefined>(
     undefined
   );
+  const [marketOverview, setMarketOverview] = useState<
+    OverviewInfo | undefined
+  >(undefined);
   const [winnerMarkets, setWinnerMarkets] = useState<Market[]>([]);
   const [top3Markets, setTop3Markets] = useState<Market[]>([]);
   const [totalVolume, setTotalVolume] = useState<bigint | undefined>(undefined);
@@ -126,6 +135,18 @@ const MarketsPage: FC = () => {
     };
 
     fetchMarketSummary();
+  }, []);
+
+  useEffect(() => {
+    const fetchOverview = async (): Promise<void> => {
+      try {
+        const rsp = await fetch(UtilsManager.BASE_URL + "/markets/overview");
+        const d = await rsp.json();
+        setMarketOverview(d as OverviewInfo);
+      } catch (error) {}
+    };
+
+    fetchOverview();
   }, []);
 
   function formatVolume(value: bigint): string {
@@ -249,15 +270,19 @@ const MarketsPage: FC = () => {
                   <div className="space-y-3">
                     <div className="flex justify-between items-center">
                       <span className="text-sm">Most Backed</span>
-                      <span className="font-semibold">Max Verstappen</span>
-                    </div>
-                    <div className="flex justify-between items-center">
-                      <span className="text-sm">Biggest Upset</span>
-                      <span className="font-semibold">Lando Norris</span>
+                      <span className="font-semibold">
+                        {UtilsManager.toCamelCase(
+                          marketOverview?.latest_bet_title || ""
+                        )}
+                      </span>
                     </div>
                     <div className="flex justify-between items-center">
                       <span className="text-sm">Latest Bet</span>
-                      <span className="font-semibold">$500 on Hamilton</span>
+                      <span className="font-semibold">{`$${Math.round(
+                        marketOverview?.latest_bet_amount || 0
+                      )} on ${UtilsManager.toCamelCase(
+                        marketOverview?.latest_bet_title || ""
+                      )}`}</span>
                     </div>
                   </div>
                 </div>

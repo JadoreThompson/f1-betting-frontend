@@ -379,10 +379,7 @@ const PortfolioPage: FC = () => {
 
   const formatValue = (value: any): any => {
     if (typeof value === "string") {
-      return value
-        .split("_")
-        .map((val) => val.charAt(0).toUpperCase() + val.slice(1))
-        .join(" ");
+      return UtilsManager.toCamelCase(value);
     } else if (typeof value === "number") {
       return formatNumber(value);
     }
