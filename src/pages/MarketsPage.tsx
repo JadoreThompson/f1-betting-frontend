@@ -27,7 +27,7 @@ function generateMockMarkets(count: number): Market[] {
       denominator,
       market_id: i + 1,
       back_multiplier: numerator,
-      lay_multiplier: 10 - numerator + 1,
+      lay_multiplier: 1 + Math.round(100 / (100 - (100 / numerator)))
     };
   });
 }
