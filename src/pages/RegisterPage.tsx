@@ -12,6 +12,7 @@ import { handleAuthFormSubmit } from "../utils";
 
 const RegisterPage = () => {
   const { login } = useAuthStore();
+  const navigate = useNavigate();
   const [showPassword, setShowPassword] = useState<boolean>(false);
   const [rememberMe, setRememberMe] = useState<boolean>(false);
 
@@ -25,7 +26,7 @@ const RegisterPage = () => {
             onSubmit={async (e) => {
               await handleAuthFormSubmit(e, "register");
               login();
-              useNavigate()("/");
+              navigate("/");
             }}
           >
             {/* Email Field */}

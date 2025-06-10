@@ -6,7 +6,6 @@ export async function handleAuthFormSubmit(
 ): Promise<void> {
   e.preventDefault();
   const body = Object.fromEntries(new FormData(e.currentTarget).entries());
-  console.log(body);
 
   try {
     const rsp = await fetch(UtilsManager.BASE_URL + `/auth/${authType}`, {

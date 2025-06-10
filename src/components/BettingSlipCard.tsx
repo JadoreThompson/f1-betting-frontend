@@ -1,6 +1,7 @@
 import {
   ArrowTrendingDownIcon,
   ArrowTrendingUpIcon,
+  NoSymbolIcon,
   XMarkIcon,
 } from "@heroicons/react/24/outline";
 import { useEffect, useRef, useState, type FC, type JSX } from "react";
@@ -23,6 +24,9 @@ const BettingSlipCard: FC<{
   setShow: (arg: boolean) => void;
 }> = ({ market, setShow }) => {
   const DEFAULT_METAMODAL_MSG = "Please confirm the connection in your wallet";
+  const [isAwaitingHealthCheck, setIsAwaitingHealthCheck] =
+    useState<boolean>(true);
+  const [isHealthy, setIsHealthy] = useState<boolean | undefined>(undefined);
   const [curSide, setSide] = useState<Side>("back");
   const [amount, setAmount] = useState("");
   const [isVisible, setIsVisible] = useState(false);
@@ -34,6 +38,25 @@ const BettingSlipCard: FC<{
   const [error, setError] = useState<string | null>(null);
   const [success, setSuccess] = useState<string | null>(null);
   const formRef = useRef<HTMLFormElement>(null);
+
+  useEffect(() => {
+    const fetchHealth = async () => {
+      try {
+        const rsp = await fetch(
+          UtilsManager.BASE_URL +
+            `/markets/health?market_id=${market.market_id}`
+        );
+        if (rsp.ok) {
+          setIsHealthy((await rsp.json())["health"]);
+        }
+      } catch (error) {
+      } finally {
+        setIsAwaitingHealthCheck(false);
+      }
+    };
+
+    fetchHealth();
+  }, []);
 
   useEffect(() => {
     const timer = setTimeout(() => setIsVisible(true), 50);
@@ -131,7 +154,7 @@ const BettingSlipCard: FC<{
     }
   }
 
-  function renderCardContent(): JSX.Element {
+  function renderBettingSlipCardContent(): JSX.Element {
     return (
       <>
         <div className="relative">
@@ -340,6 +363,49 @@ const BettingSlipCard: FC<{
     );
   }
 
+  function renderAwaitingHealthCheck(): JSX.Element {
+    return (
+      <div className="w-104 h-168 flex-center flex-col text-center px-5 relative z-10">
+        <h3 className="text-lg font-semibold text-gray-900">
+          Checking market health
+        </h3>
+        <div className="flex items-center justify-center space-x-1 mt-4">
+          <div className="w-2 h-2 bg-blue-500 rounded-full animate-bounce"></div>
+          <div
+            className="w-2 h-2 bg-blue-500 rounded-full size-10 animate-bounce"
+            style={{ animationDelay: "0.1s" }}
+          ></div>
+          <div
+            className="w-2 h-2 bg-blue-500 rounded-full animate-bounce"
+            style={{ animationDelay: "0.2s" }}
+          ></div>
+        </div>
+      </div>
+    );
+  }
+
+  function renderNotHeatlhy(): JSX.Element {
+    setTimeout(() => handleClose(), 2000);
+    return (
+      <div className="w-104 h-168 flex-center flex-col text-center px-5 relative z-10">
+        <NoSymbolIcon color="red" className="w-20 h-20" />
+        <h3 className="text-lg font-semibold text-gray-900">Market not open</h3>
+      </div>
+    );
+  }
+
+  function renderCardContent(): JSX.Element {
+    if (isAwaitingHealthCheck) {
+      return renderAwaitingHealthCheck();
+    }
+
+    if (isHealthy) {
+      return renderBettingSlipCardContent();
+    }
+
+    return renderNotHeatlhy();
+  }
+
   return (
     <>
       {showMetaMaskModal && (
@@ -393,7 +459,7 @@ const BettingSlipCard: FC<{
               : "-translate-y-full opacity-0"
           }`}
         >
-          <div className="max-w-md max-h-176 rounded-2xl shadow-2xl border border-gray-200 bg-white overflow-hidden overflow-y-scroll">
+          <div className="max-w-md max-h-176 rounded-2xl shadow-2xl border border-gray-200 bg-white overflow-hidden overflow-y-auto">
             {renderCardContent()}
           </div>
         </div>

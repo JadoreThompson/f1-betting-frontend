@@ -18,8 +18,8 @@ function generateMockMarkets(count: number): Market[] {
   return Array.from({ length: count }, (_, i) => {
     const title = `Market ${i}`;
     const category = categories[i % categories.length];
-    const numerator = Math.floor(Math.random() * 90 + 10); // 10–99
-    const denominator = 100;
+    const numerator = Math.floor(Math.random() * 15); // <= 15
+    const denominator = 1;
     return {
       title,
       category,
@@ -27,7 +27,7 @@ function generateMockMarkets(count: number): Market[] {
       denominator,
       market_id: i + 1,
       back_multiplier: numerator,
-      lay_multiplier: 1 + Math.round(100 / (100 - (100 / numerator)))
+      lay_multiplier: 1 + Math.round(100 / (100 - 100 / numerator)),
     };
   });
 }
@@ -41,13 +41,12 @@ function loadMockMarkets(): {
   const titles = Object.keys(markets[0]);
   const winners = markets.filter((m) => m.category == "winner");
   const top3s = markets.filter((m) => m.category == "top3");
-  const data = {
+
+  return {
     titles,
     winners: winners.map((wm) => Object.values(wm)),
     top3: top3s.map((t3m) => Object.values(t3m)),
   };
-
-  return data;
 }
 
 interface OverviewInfo {
@@ -114,6 +113,7 @@ const MarketsPage: FC = () => {
       try {
         const response = await fetch(UtilsManager.BASE_URL + "/markets");
         const data = await response.json();
+        // const data = loadMockMarkets();
         setWinnerMarkets(parseMarketsData(data.titles, data.winners));
         setTop3Markets(parseMarketsData(data.titles, data.top3));
       } catch (error) {
@@ -212,7 +212,11 @@ const MarketsPage: FC = () => {
             <div className="grid grid-cols-1 lg:grid-cols-2 gap-12 items-center">
               <div>
                 <div className="inline-flex items-center gap-2 bg-blue-600/20 text-blue-200 px-3 py-1 rounded-full text-sm mb-4">
-                  <div className="w-2 h-2 bg-green-400 rounded-full animate-pulse"></div>
+                  <div
+                    className={`w-2 h-2 rounded-full animate-pulse ${
+                      upcomingRace ? "bg-green-400" : "bg-red-400"
+                    }`}
+                  ></div>
                   Live Event
                 </div>
                 <h1 className="text-4xl lg:text-5xl font-bold mb-4 leading-tight">
@@ -278,11 +282,13 @@ const MarketsPage: FC = () => {
                     </div>
                     <div className="flex justify-between items-center">
                       <span className="text-sm">Latest Bet</span>
-                      <span className="font-semibold">{`$${Math.round(
-                        marketOverview?.latest_bet_amount || 0
-                      )} on ${UtilsManager.toCamelCase(
-                        marketOverview?.latest_bet_title || ""
-                      )}`}</span>
+                      {marketOverview && (
+                        <span className="font-semibold">{`$${Math.round(
+                          marketOverview?.latest_bet_amount || 0
+                        )} on ${UtilsManager.toCamelCase(
+                          marketOverview?.latest_bet_title || ""
+                        )}`}</span>
+                      )}
                     </div>
                   </div>
                 </div>
