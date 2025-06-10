@@ -93,7 +93,7 @@ const BettingSlipCard: FC<{
 
   const sanitizeInput = (value: string) => /^\d*\.?\d*$/.test(value.trim());
 
-  async function sendToEngine(payload: EnginePayload): Promise<boolean> {
+  async function sendToEngine(payload: EnginePayload): Promise<void> {
     try {
       const rsp = await fetch(UtilsManager.BASE_URL + "/bet/create", {
         method: "POST",
@@ -105,8 +105,8 @@ const BettingSlipCard: FC<{
       });
 
       if (!rsp.ok) throw new Error(`An error occured ${rsp.status}`);
-      return true;
     } catch (error) {
+      console.error(error);
       throw new Error("Failed to send bet to engine. Please try again.");
     }
   }
@@ -142,11 +142,14 @@ const BettingSlipCard: FC<{
       }
 
       formData.txn_address = result.transactionHash!;
+
       await sendToEngine(formData);
       setSuccess("Bet placed successfully");
 
+      // setShowMetaMaskModal(false);
       handleClose();
     } catch (error) {
+      console.error(error);
       setError((error as Error).message);
     } finally {
       setShowMetaMaskModal(false);

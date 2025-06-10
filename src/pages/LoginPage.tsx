@@ -17,7 +17,6 @@ const LoginPage = () => {
   const [password, setPassword] = useState("");
   const [rememberMe, setRememberMe] = useState(false);
 
-  useEffect(() => console.log("state change: ", isLoggedIn), [isLoggedIn]);
 
   return (
     <div className="min-h-screen bg-gradient-to-br from-blue-50 via-purple-50 to-pink-50 flex items-center justify-center p-4">
@@ -30,7 +29,6 @@ const LoginPage = () => {
               await handleAuthFormSubmit(e, "login");
               login();
               navigate("/");
-              console.log("aaa");
             }}
           >
             {/* Email Field */}

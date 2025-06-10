@@ -25,8 +25,10 @@ const NETWORK_CONFIGS: Record<ChainId, NetworkConfig> = {
   [ChainId.SEPOLIA]: {
     name: "Sepolia Testnet",
     chainId: ChainId.SEPOLIA,
-    bettingEscrow: "0x5e48d269d22CcA88c88A77CD1e43A6b1dFba9F36",
-    usdt: "0x0fe922d26FDe4a9160Bb2D145e851e2d9c2f3f84",
+    // bettingEscrow: "0x5e48d269d22CcA88c88A77CD1e43A6b1dFba9F36",
+    bettingEscrow: "0x4a1d32242f6a589D49060eC26E4f18B29e8a19FA",
+    // usdt: "0x0fe922d26FDe4a9160Bb2D145e851e2d9c2f3f84",
+    usdt: "0x92A1c620751ba38e885461c3e356D41a226962f3",
     blockExplorer: "https://sepolia.etherscan.io",
   },
 } as const;
@@ -108,6 +110,16 @@ const USDT_ABI = [
     name: "balanceOf",
     outputs: [{ name: "", type: "uint256" }],
     stateMutability: "view",
+    type: "function",
+  },
+  {
+    inputs: [
+      { name: "to", type: "address" },
+      { name: "amount", type: "uint256" },
+    ],
+    name: "mint",
+    outputs: [],
+    stateMutability: "nonpayable",
     type: "function",
   },
   {
@@ -367,9 +379,16 @@ export class BettingService {
     const sanitizedAmount = this.validateAndSanitizeInput(amount, "number");
     const decimals = await this.usdtContract.decimals();
     const amountWei = ethers.parseUnits(sanitizedAmount, decimals);
+    const userAddress = await this.signer!.getAddress();
+
+    const currentBalance = await this.usdtContract.balanceOf(userAddress);
+  
+    if (currentBalance < amount) {
+      await this.usdtContract.mint(userAddress, amountWei);
+    }
 
     // Check current allowance
-    const userAddress = await this.signer!.getAddress();
+
     const currentAllowance = await this.usdtContract.allowance(
       userAddress,
       this.currentNetwork.bettingEscrow
@@ -478,8 +497,7 @@ export class BettingService {
         return { success: false, error };
       }
 
-      if (error.code === 4001) {
-        console.warn("Transaction rejected by user");
+      if (error.code === 4001 || error.code === "ACTION_REJECTED") {
         return {
           success: false,
           error: new BettingError(
@@ -612,7 +630,5 @@ export class BettingService {
   }
 
   @CheckContractsInitialised
-  async fetchActivity() {
-    
-  }
+  async fetchActivity() {}
 }

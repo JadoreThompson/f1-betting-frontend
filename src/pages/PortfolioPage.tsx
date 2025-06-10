@@ -302,7 +302,6 @@ const PortfolioPage: FC = () => {
 
         if (rsp.ok) {
           const data = await rsp.json();
-          console.log(data.pagination);
 
           setActivities(data.data.length ? data.data : undefined);
           setActivitiesPagination(data.pagination);
