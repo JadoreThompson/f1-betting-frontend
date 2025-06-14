@@ -7,8 +7,8 @@ import {
 } from "@heroicons/react/24/outline";
 import { useState } from "react";
 import { useNavigate } from "react-router";
+import { handleAuthFormSubmit } from "../lib/utils";
 import { useAuthStore } from "../stores/authStore";
-import { handleAuthFormSubmit } from "../utils";
 
 const RegisterPage = () => {
   const { login } = useAuthStore();

@@ -1,49 +1,174 @@
 import MetaMaskSDK from "@metamask/sdk";
 import { ethers } from "ethers";
-import { BettingError, BettingErrorType } from "../errors/bettingError";
-import type { BetResult } from "../types/betResult";
-import { ChainId, type NetworkConfig } from "../types/networkConfig";
-import type { SecurityValidation } from "../types/securityValidation";
 import { BETTING_ESCROW_ABI, NETWORK_CONFIGS, USDT_ABI } from "../constants";
 import { CheckContractsInitialised } from "../decorators";
+import type { EthersRevert } from "../errors/EthersRevert";
 
-// TODO: DRY and optimise.
+import {
+  ValidationError,
+  ValidationErrorType,
+} from "../errors/ValidationError";
+import { Web3Error } from "../errors/Web3Error";
+import { ChainId, type NetworkConfig } from "../types/networkConfig";
+
 export class BettingService {
-  private provider: any = null;
-  private signer: ethers.Signer | null = null;
-  private currentNetwork: NetworkConfig | null = null;
-  private bettingContract: ethers.Contract | null = null;
-  private usdtContract: ethers.Contract | null = null;
-  private readonly MAX_UINT256: number = 2 ** 256 - 1;
-  private readonly MAX_GAS_PRICE: bigint = ethers.parseUnits("1000", "gwei"); // 100 gwei max
+  private targetChainId: ChainId;
+  private MMSDK: MetaMaskSDK;
+
+  private currentNetwork: NetworkConfig | undefined = undefined;
+  private provider: ethers.BrowserProvider | undefined = undefined;
+  private signer: ethers.Signer | undefined = undefined;
+
+  private usdtContract: ethers.Contract | undefined = undefined;
+  private usdtDecimals: number | undefined = undefined;
+  private bettingContract: ethers.Contract | undefined = undefined;
+
+  constructor(chainId: ChainId) {
+    this.MMSDK = new MetaMaskSDK();
+    this.targetChainId = chainId;
+  }
 
   /**
-   * Validates and sanitizes input for number or address types.
-   * @param input The input string to validate.
-   * @param type The type of input to validate ("number" or "address").
-   * @returns {string} The sanitized input string.
+   * Validates the connected network matches the target chain ID.
+   * If not, attempts to switch to the target network via MetaMask.
+   * @returns The target network configuration.
+   * @throws {Web3Error} if provider is uninitialized or switch fails.
    */
-  private validateAndSanitizeInput(
-    input: string,
-    type: "number" | "address"
-  ): string {
+  private async validateNetwork(): Promise<NetworkConfig> {
+    if (!this.provider) {
+      throw new Web3Error("Provider not initialised.");
+    }
+
+    const chainNetworkConfig = NETWORK_CONFIGS[this.targetChainId];
+
+    let network = await this.provider.getNetwork();
+    const curChainId = Number(network.chainId) as ChainId;
+
+    if (curChainId !== this.targetChainId) {
+      try {
+        await (window as any).ethereum.request({
+          method: "wallet_switchEthereumChain",
+          params: [{ chainId: chainNetworkConfig.hexChainId }],
+        });
+      } catch (error) {
+        throw new Web3Error("Switch to Sepolia failed");
+      }
+    }
+
+    return chainNetworkConfig;
+  }
+
+  /**
+   * Checks the presence of betting and USDT contracts on the network,
+   * initializes contract instances, and validates the USDT token address.
+   * Also fetches USDT token decimals.
+   * @param networkConfig Configuration of the target network.
+   * @throws {Web3Error} if contracts are missing or USDT address mismatches.
+   */
+  private async validateAndLoadContracts(
+    networkConfig: NetworkConfig
+  ): Promise<void> {
+    const [bettingCode, usdtCode] = await Promise.all([
+      this.provider!.getCode(networkConfig.bettingEscrow),
+      this.provider!.getCode(networkConfig.usdt),
+    ]);
+
+    if (bettingCode === "0x" || usdtCode === "0x") {
+      throw new Web3Error(
+        "One or more contracts not found at specified addresses."
+      );
+    }
+
+    const bettingContract = new ethers.Contract(
+      networkConfig.bettingEscrow,
+      BETTING_ESCROW_ABI,
+      this.signer
+    );
+
+    const contractUsdtAddress = await bettingContract.usdtToken();
+
+    if (
+      contractUsdtAddress.toLowerCase() !== networkConfig.usdt.toLowerCase()
+    ) {
+      throw new Web3Error(
+        "USDT token address mismatch between config and contract."
+      );
+    }
+
+    this.bettingContract = bettingContract;
+
+    this.usdtContract = new ethers.Contract(
+      networkConfig.usdt,
+      USDT_ABI,
+      this.signer
+    );
+
+    this.usdtDecimals = Number(await this.usdtContract.decimals());
+  }
+
+  /** Resets all contract instances, provider, signer, and decimals to undefined. */
+  private cleanUp(): void {
+    this.usdtContract = undefined;
+    this.bettingContract = undefined;
+    this.usdtDecimals = undefined;
+    this.provider = undefined;
+    this.signer = undefined;
+  }
+
+  /**
+   * Connects to MetaMask, initializes provider, signer, network, and contracts.
+   * @returns The first connected account address.
+   * @throws {Web3Error} if no accounts or user rejects connection.
+   */
+  async connect(): Promise<string> {
+    if (this.signer) {
+      const address = await this.signer.getAddress();
+      return address;
+    }
+
+    try {
+      const accounts = await this.MMSDK.connect();
+
+      if (!accounts.length) {
+        throw new Web3Error("No accounts available.");
+      }
+
+      this.provider = new ethers.BrowserProvider((window as any).ethereum);
+      this.signer = await this.provider.getSigner();
+      this.currentNetwork = await this.validateNetwork();
+      await this.validateAndLoadContracts(this.currentNetwork);
+
+      return accounts[0];
+    } catch (error) {
+      this.cleanUp();
+
+      if ((error as EthersRevert).code === 4001) {
+        throw new Web3Error("User rejected connection.");
+      }
+
+      throw error;
+    }
+  }
+
+  /**
+   * Validates and sanitizes input based on type: number or address.
+   * @param input Raw input string.
+   * @param type The expected type of input ("number" or "address").
+   * @returns Sanitised input string.
+   * @throws {ValidationError} if input format is invalid.
+   */
+  private sanitiseInput(input: string, type: "number" | "address"): string {
     const trimmed = input.trim();
 
     if (type === "number") {
-      if (!/^\d*\.?\d*$/.test(trimmed)) {
-        throw new BettingError(
-          BettingErrorType.INVALID_AMOUNT,
-          "Invalid number format"
-        );
+      if (!/^\d+(\.\d+)?$/.test(trimmed)) {
+        throw new ValidationError("Invalid number format.");
       }
     }
 
     if (type === "address") {
       if (!ethers.isAddress(trimmed)) {
-        throw new BettingError(
-          BettingErrorType.INVALID_AMOUNT,
-          "Invalid address format"
-        );
+        throw new ValidationError("Invalid address format.");
       }
     }
 
@@ -51,411 +176,123 @@ export class BettingService {
   }
 
   /**
-   * Validates the current network and switches to Sepolia if not already connected.
-   * @returns {Promise<NetworkConfig>} The current network configuration.
-   * @throws {Error} If the provider is not initialized or network switch fails.
+   * Validates USDT balance and allowance for a given amount.
+   * Mints USDT if on Sepolia and balance is insufficient.
+   * @param amountWei Amount in wei units.
+   * @throws {ValidationError} if balance or allowance is insufficient.
    */
-  private async validateNetwork(): Promise<NetworkConfig> {
-    if (!this.provider) throw new Error("Provider not initialized");
+  @CheckContractsInitialised
+  private async validateUSDT(amountWei: bigint) {
+    const address = await this.signer?.getAddress();
+    const usdtContract = this.usdtContract!;
+    const balance = await usdtContract.balanceOf(address);
 
-    const network = await this.provider.getNetwork();
-    const curChainId = Number(network.chainId) as ChainId;
-
-    if (curChainId !== ChainId.SEPOLIA) {
-      try {
-        await (window as any).ethereum.request({
-          method: "wallet_switchEthereumChain",
-          params: [{ chainId: "0xaa36a7" }], // Hex chainId for Sepolia
-        });
-      } catch (switchError: any) {
-        throw new Error("Switch to Sepolia failed");
+    if (balance < amountWei) {
+      if (this.targetChainId == ChainId.SEPOLIA) {
+        const mintTx = await usdtContract.mint(address, amountWei);
+        await mintTx.wait();
+      } else {
+        throw new ValidationError("Insufficient balance.");
       }
     }
 
-    return NETWORK_CONFIGS[
-      (await this.provider
-        .getNetwork()
-        .then((n: any) => Number(n.chainId))) as ChainId
-    ];
-  }
-
-  /**
-   * Validates the presence and correctness of the betting and USDT contracts.
-   * @param config The network configuration containing contract addresses.
-   */
-  private async validateContracts(config: NetworkConfig): Promise<void> {
-    if (!this.provider) throw new Error("Provider not initialized");
-
-    const bettingCode = await this.provider.getCode(config.bettingEscrow);
-    const usdtCode = await this.provider.getCode(config.usdt);
-
-    if (bettingCode === "0x" || usdtCode === "0x") {
-      throw new BettingError(
-        BettingErrorType.CONTRACT_NOT_FOUND,
-        "One or more contracts not found at specified addresses"
-      );
-    }
-
-    // Verify USDT token address matches contract's expectation
-    const bettingContract = new ethers.Contract(
-      config.bettingEscrow,
-      BETTING_ESCROW_ABI,
-      this.provider
-    );
-    const contractUsdtAddress = await bettingContract.usdtToken();
-
-    if (contractUsdtAddress.toLowerCase() !== config.usdt.toLowerCase()) {
-      throw new BettingError(
-        BettingErrorType.CONTRACT_NOT_FOUND,
-        "USDT token address mismatch between config and contract"
-      );
-    }
-  }
-
-  /**
-   * Connects to MetaMask, retrieves the user's Ethereum account, and sets up
-   * the provider, signer, and contract instances needed for betting. Validates
-   * the network and contracts before returning the connected account address.
-   *
-   * @returns {Promise<string>} The connected account address.
-   * @throws {BettingError} When the user rejects the connection request.
-   * @throws {Error} For other connection or validation failures.
-   */
-  async connectToMetaMask(): Promise<string> {
-    try {
-      const MMSDK = new MetaMaskSDK();
-      const accounts = await MMSDK.connect();
-
-      if (!accounts.length) {
-        throw new Error("No accounts found");
-      }
-
-      const account = accounts[0];
-
-      this.provider = new ethers.BrowserProvider((window as any).ethereum);
-      this.signer = await this.provider.getSigner();
-      this.currentNetwork = await this.validateNetwork();
-      await this.validateContracts(this.currentNetwork);
-
-      this.bettingContract = new ethers.Contract(
-        this.currentNetwork.bettingEscrow,
-        BETTING_ESCROW_ABI,
-        this.signer
-      );
-
-      this.usdtContract = new ethers.Contract(
-        this.currentNetwork.usdt,
-        USDT_ABI,
-        this.signer
-      );
-
-      return account;
-    } catch (error: any) {
-      if (error.code === 4001) {
-        throw new BettingError(
-          BettingErrorType.USER_REJECTED,
-          "User rejected connection"
-        );
-      }
-      throw error;
-    }
-  }
-
-  /**
-   * Checks the user's USDT balance.
-   * @param {string} userAddress The user's wallet address.
-   * @return {Promise<string>} The user's USDT balance formatted as a string.
-   * @throws {Error} If the USDT contract is not initialized or balance retrieval fails.
-   */
-  async checkUserBalance(userAddress: string): Promise<string> {
-    if (!this.usdtContract) throw new Error("USDT contract not initialized");
-
-    const balance = await this.usdtContract.balanceOf(userAddress);
-    const decimals = await this.usdtContract.decimals();
-
-    return ethers.formatUnits(balance, decimals);
-  }
-
-  /**
-   * Checks the user's USDT allowance for the betting escrow contract.
-   * @param {string} userAddress The user's wallet address.
-   * @return {Promise<string>} The user's USDT allowance formatted as a string.
-   * @throws {Error} If the USDT contract or current network is not initialized.
-   */
-  async checkAllowance(userAddress: string): Promise<string> {
-    if (!this.usdtContract || !this.currentNetwork)
-      throw new Error("Contracts not initialized");
-
-    const allowance = await this.usdtContract.allowance(
-      userAddress,
-      this.currentNetwork.bettingEscrow
-    );
-    const decimals = await this.usdtContract.decimals();
-
-    return ethers.formatUnits(allowance, decimals);
-  }
-
-  /**
-   * Approves USDT for the betting escrow contract.
-   * @param {string} amount The amount of USDT to approve.
-   * @return {Promise<[boolean, string?]>} A tuple indicating success and transaction hash if successful.
-   * @throws {Error} If the USDT contract or current network is not initialized, or if approval fails.
-   */
-  async approveUSDT(amount: string): Promise<[boolean, string?]> {
-    if (!this.usdtContract || !this.currentNetwork)
-      throw new Error("Contracts not initialized");
-
-    const sanitizedAmount = this.validateAndSanitizeInput(amount, "number");
-    const decimals = await this.usdtContract.decimals();
-    const amountWei = ethers.parseUnits(sanitizedAmount, decimals);
-    const userAddress = await this.signer!.getAddress();
-
-    const currentBalance = await this.usdtContract.balanceOf(userAddress);
-
-    if (currentBalance < amount) {
-      await this.usdtContract.mint(userAddress, amountWei); // Only here for beta.
-    }
-
-    const currentAllowance = await this.usdtContract.allowance(
-      userAddress,
-      this.currentNetwork.bettingEscrow
+    const allowance = await usdtContract.allowance(
+      address,
+      this.currentNetwork!.bettingEscrow
     );
 
-    if (currentAllowance >= amountWei) {
-      return [true];
+    if (allowance < amountWei) {
+      const formattedAmount = ethers.formatUnits(amountWei, this.usdtDecimals);
+      throw new ValidationError(
+        `Insufficient allowance. Please approve ${formattedAmount} USDT.`,
+        ValidationErrorType.REQUIRES_APPROVAL
+      );
     }
+  }
 
-    const gasEstimate = await this.usdtContract.approve.estimateGas(
-      this.currentNetwork.bettingEscrow,
+  /**
+   * Approves the betting escrow contract to spend a specified USDT amount.
+   * @param amount Amount of USDT to approve (as string).
+   * @returns Transaction hash of the approval.
+   */
+  @CheckContractsInitialised
+  async approveUSDT(amount: string): Promise<string> {
+    const sanitizedAmount = this.sanitiseInput(amount, "number");
+    const amountWei = ethers.parseUnits(sanitizedAmount, this.usdtDecimals);
+    const tx = await this.usdtContract!.approve(
+      this.currentNetwork!.bettingEscrow,
       amountWei
     );
-
-    // Get current gas price and validate
-    const gasPrice = await this.provider!.getFeeData();
-    if (gasPrice.gasPrice && gasPrice.gasPrice > this.MAX_GAS_PRICE) {
-      throw new Error(
-        `Gas price too high: ${ethers.formatUnits(
-          gasPrice.gasPrice,
-          "gwei"
-        )} gwei`
-      );
-    }
-
-    const tx = await this.usdtContract.approve(
-      this.currentNetwork.bettingEscrow,
-      amountWei,
-      {
-        gasLimit: (gasEstimate * 120n) / 100n, // 20% buffer
-        gasPrice: gasPrice.gasPrice,
-      }
-    );
-
     await tx.wait();
-    return [true, tx.hash];
+    return tx.hash;
   }
 
   /**
-   * Places a bet on a specified market.
-   * @param {number} marketId The ID of the market to bet on.
-   * @param {string} amount The amount of USDT to bet.
-   * @return {Promise<BetResult>} The result of the bet placement.
+   * Places a bet on a specified market with a given USDT amount.
+   * Validates input, USDT balance, allowance, and handles approval if needed.
+   * @param marketId The ID of the betting market.
+   * @param amount Amount of USDT to bet (as string).
+   * @returns Transaction hash of the bet placement.
+   * @throws {ValidationError, Web3Error} on input, balance, allowance, or transaction failure.
    */
-  async placeBet(marketId: number, amount: string): Promise<BetResult> {
+  @CheckContractsInitialised
+  async placeBet(marketId: number, amount: string): Promise<string> {
     try {
-      if (!this.bettingContract || !this.signer || !this.currentNetwork) {
-        throw new BettingError(
-          BettingErrorType.CONTRACT_NOT_FOUND,
-          "Contracts not initialized"
-        );
-      }
-
-      const sanitizedAmount = this.validateAndSanitizeInput(amount, "number");
+      const sanitisedAmount = this.sanitiseInput(amount, "number");
 
       if (marketId < 0 || !Number.isInteger(marketId)) {
-        throw new BettingError(
-          BettingErrorType.INVALID_MARKET,
-          "Invalid market ID"
-        );
+        throw new ValidationError("Invalid market ID.");
       }
 
-      const userAddress = await this.signer.getAddress();
-      const decimals = await this.usdtContract!.decimals();
-      const amountWei = ethers.parseUnits(sanitizedAmount, decimals);
-
+      const amountWei = ethers.parseUnits(sanitisedAmount, this.usdtDecimals);
       if (amountWei <= 0n) {
-        console.error("Amount must be greater than zero");
-        throw new BettingError(
-          BettingErrorType.INVALID_AMOUNT,
-          "Amount must be greater than zero"
+        throw new ValidationError("Amount must be greater than zero.");
+      }
+
+      const maximumAmountWei = 2n ** 256n - 1n;
+      if (amountWei > maximumAmountWei) {
+        throw new ValidationError(
+          `Amount exceeds maximum ${maximumAmountWei}.`
         );
       }
 
-      if (amountWei > this.MAX_UINT256) {
-        throw new BettingError(
-          BettingErrorType.INVALID_AMOUNT,
-          "Amount exceeds uint256 maximum"
-        );
+      try {
+        await this.validateUSDT(amountWei);
+      } catch (error: any) {
+        if (
+          (error as ValidationError).type ===
+          ValidationErrorType.REQUIRES_APPROVAL
+        ) {
+          await this.approveUSDT(amount);
+        } else {
+          throw error;
+        }
       }
 
-      await this.approveUSDT(sanitizedAmount);
-      const validations = await this.performSecurityValidations(
-        userAddress,
-        amountWei,
-        decimals
-      );
+      const tx = await this.bettingContract!.placeBet(marketId, amountWei);
+      await tx.wait();
 
-      if (!validations.isValidNetwork || !validations.hasValidContracts) {
-        throw new BettingError(
-          BettingErrorType.NETWORK_MISMATCH,
-          "Security validation failed"
-        );
-      }
-
-      const tx = await this.bettingContract.placeBet(marketId, amountWei);
-      const receipt = await tx.wait();
-
-      return {
-        success: true,
-        transactionHash: tx.hash,
-        gasUsed: receipt?.gasUsed?.toString(),
-      };
+      return tx.hash as string;
     } catch (error: any) {
-      if (error instanceof BettingError) {
-        return { success: false, error };
-      }
-
-      if (error.code === 4001 || error.code === "ACTION_REJECTED") {
-        return {
-          success: false,
-          error: new BettingError(
-            BettingErrorType.USER_REJECTED,
-            "Transaction rejected by user"
-          ),
-        };
-      }
-
-      return {
-        success: false,
-        error: new BettingError(
-          BettingErrorType.TRANSACTION_FAILED,
-          error.message || "Unknown error occurred"
-        ),
-      };
-    }
-  }
-
-  // Comprehensive security validations
-  private async performSecurityValidations(
-    userAddress: string,
-    amountWei: bigint,
-    decimals: number
-  ): Promise<SecurityValidation> {
-    const results: SecurityValidation = {
-      isValidNetwork: false,
-      isValidAmount: false,
-      hasValidContracts: false,
-      isRateLimited: false,
-    };
-
-    try {
-      await this.validateNetwork();
-      results.isValidNetwork = true;
-
-      await this.validateContracts(this.currentNetwork!);
-      results.hasValidContracts = true;
-
-      // Balance validation
-      const balance = await this.usdtContract!.balanceOf(userAddress);
-      if (balance < amountWei) {
-        throw new BettingError(
-          BettingErrorType.INSUFFICIENT_BALANCE,
-          `Insufficient balance. You have ${ethers.formatUnits(
-            balance,
-            decimals
-          )} USDT`
-        );
-      }
-
-      // Allowance validation
-      const allowance = await this.usdtContract!.allowance(
-        userAddress,
-        this.currentNetwork!.bettingEscrow
-      );
-      if (allowance < amountWei) {
-        throw new BettingError(
-          BettingErrorType.INSUFFICIENT_ALLOWANCE,
-          `Insufficient allowance. Please approve ${ethers.formatUnits(
-            amountWei,
-            decimals
-          )} USDT`
-        );
-      }
-
-      results.isValidAmount = true;
-      results.isRateLimited = false;
-    } catch (error) {
-      if (error instanceof BettingError) {
+      if (error instanceof ValidationError) {
         throw error;
       }
-      throw new BettingError(
-        BettingErrorType.TRANSACTION_FAILED,
-        "Security validation failed"
-      );
-    }
 
-    return results;
-  }
+      const ethersRevertError = error as EthersRevert;
+      if (
+        ethersRevertError.code === 4001 ||
+        ethersRevertError.code === "ACTION_REJECTED"
+      ) {
+        throw new Web3Error("Transaction rejected by user.");
+      }
 
-  /**
-   * Retrieves market information including total escrow, user participation, and validity.
-   * @param {number} marketId The ID of the market to retrieve information for.
-   * @return {Promise<{ totalEscrow: string; userParticipated: boolean; isValid: boolean }>} Market information.
-   * @throws {Error} If contracts are not initialized or if retrieval fails.
-   */
-  async getMarketInfo(marketId: number): Promise<{
-    totalEscrow: string;
-    userParticipated: boolean;
-    isValid: boolean;
-  }> {
-    if (!this.bettingContract || !this.signer) {
-      throw new Error("Contracts not initialized");
-    }
+      if (ethersRevertError.code === "CALL_EXCEPTION")
+        throw new Web3Error(ethersRevertError.reason);
 
-    const userAddress = await this.signer.getAddress();
-    const decimals = await this.usdtContract!.decimals();
+      if (ethersRevertError.revert)
+        throw new Web3Error(ethersRevertError.reason);
 
-    try {
-      const [totalEscrow, userParticipated] = await Promise.all([
-        this.bettingContract.marketEscrow(marketId),
-        this.bettingContract.containsParticipant(marketId, userAddress),
-      ]);
-
-      return {
-        totalEscrow: ethers.formatUnits(totalEscrow, decimals),
-        userParticipated,
-        isValid: true,
-      };
-    } catch (error) {
-      return {
-        totalEscrow: "0",
-        userParticipated: false,
-        isValid: false,
-      };
+      throw new Error((error as Error).message);
     }
   }
-
-  @CheckContractsInitialised
-  async fetchVolume(): Promise<bigint> {
-    const decimals: number = await this.usdtContract!.decimals();
-    const volume: number = await this.bettingContract!.volume();
-    return BigInt(volume) / BigInt(10) ** BigInt(decimals);
-  }
-
-  @CheckContractsInitialised
-  async fetchNumActiveBets(): Promise<bigint> {
-    return await this.bettingContract!.activeBetCount();
-  }
-
-  @CheckContractsInitialised
-  async fetchActivity() {}
 }

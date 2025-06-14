@@ -1,8 +1,8 @@
 import { ArrowTrendingUpIcon } from "@heroicons/react/24/outline";
 import { useEffect, useState, type ComponentType } from "react";
 import { useNavigate } from "react-router";
-import { UtilsManager } from "../classes/UtilsManager";
 import { useAuthStore } from "../stores/authStore";
+import { UtilsManager } from "../lib/classes/UtilsManager";
 
 interface ProtectedProps<T extends object> {
   Component: ComponentType<T>;
@@ -29,7 +29,6 @@ export function Protected<T extends object>({
         login();
         setIsLoading(false);
       } catch (error) {
-        console.error("Authentication failed:", error);
         logout();
         navigate("/login");
       }

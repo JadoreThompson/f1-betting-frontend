@@ -5,8 +5,10 @@ import {
   XMarkIcon,
 } from "@heroicons/react/24/outline";
 import { useEffect, useRef, useState, type FC, type JSX } from "react";
-import { BettingService, type BetResult } from "../classes/BettingService";
-import { UtilsManager } from "../classes/UtilsManager";
+
+import { BettingService } from "../lib/classes/BettingService";
+import { UtilsManager } from "../lib/classes/UtilsManager";
+import { ChainId } from "../lib/types/networkConfig";
 import type { Market } from "../types";
 
 type Side = "back" | "lay";
@@ -24,19 +26,28 @@ const BettingSlipCard: FC<{
   setShow: (arg: boolean) => void;
 }> = ({ market, setShow }) => {
   const DEFAULT_METAMODAL_MSG = "Please confirm the connection in your wallet";
+
   const [isAwaitingHealthCheck, setIsAwaitingHealthCheck] =
     useState<boolean>(true);
   const [isHealthy, setIsHealthy] = useState<boolean | undefined>(undefined);
   const [curSide, setSide] = useState<Side>("back");
   const [amount, setAmount] = useState("");
+
   const [isVisible, setIsVisible] = useState(false);
   const [isClosing, setIsClosing] = useState(false);
+
   const [showMetaMaskModal, setShowMetaMaskModal] = useState<boolean>(false);
   const [metaMaskModalMessage, setMetaMaskModalMessage] = useState<string>(
     DEFAULT_METAMODAL_MSG
   );
+
   const [error, setError] = useState<string | null>(null);
   const [success, setSuccess] = useState<string | null>(null);
+
+  const [bettingService] = useState<BettingService>(
+    () => new BettingService(ChainId.SEPOLIA)
+  );
+
   const formRef = useRef<HTMLFormElement>(null);
 
   useEffect(() => {
@@ -106,7 +117,6 @@ const BettingSlipCard: FC<{
 
       if (!rsp.ok) throw new Error(`An error occured ${rsp.status}`);
     } catch (error) {
-      console.error(error);
       throw new Error("Failed to send bet to engine. Please try again.");
     }
   }
@@ -123,33 +133,23 @@ const BettingSlipCard: FC<{
 
     try {
       setShowMetaMaskModal(true);
-      const bs = new BettingService();
 
       const formData = {
         amount: Number.parseFloat(amount),
         side: curSide,
         market_id: market.market_id,
-        wallet_address: await bs.connectToMetaMask(),
+        wallet_address: await bettingService.connect(),
       } as EnginePayload;
 
-      setMetaMaskModalMessage("Confirm contract to place bet");
+      setMetaMaskModalMessage("Confirm contract to place bet.");
 
-      const result: BetResult = await bs.placeBet(market.market_id, "1000");
-
-      if (!result.success) {
-        setError(result.error!.message);
-        return;
-      }
-
-      formData.txn_address = result.transactionHash!;
+      const result = await bettingService.placeBet(market.market_id, amount);
+      formData.txn_address = result;
 
       await sendToEngine(formData);
       setSuccess("Bet placed successfully");
-
-      // setShowMetaMaskModal(false);
-      handleClose();
+      setTimeout(() => handleClose(), 1000);
     } catch (error) {
-      console.error(error);
       setError((error as Error).message);
     } finally {
       setShowMetaMaskModal(false);
@@ -163,7 +163,7 @@ const BettingSlipCard: FC<{
         <div className="relative">
           <button
             onClick={handleClose}
-            className="absolute right-0 top-2 hover:cursor-pointer"
+            className="abettingServiceolute right-0 top-2 hover:cursor-pointer"
           >
             <XMarkIcon className="w-7 h-7" />
           </button>
@@ -234,7 +234,7 @@ const BettingSlipCard: FC<{
                   Stake Amount
                 </label>
                 <div className="relative">
-                  <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
+                  <div className="abettingServiceolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
                     <span className="text-gray-500 text-lg">$</span>
                   </div>
                   <input

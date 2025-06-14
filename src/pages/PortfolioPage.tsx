@@ -7,8 +7,9 @@ import {
   Squares2X2Icon,
 } from "@heroicons/react/24/outline";
 import { useEffect, useRef, useState, type FC, type JSX } from "react";
-import { UtilsManager } from "../classes/UtilsManager";
+
 import Header from "../components/Header";
+import { UtilsManager } from "../lib/classes/UtilsManager";
 
 interface UserStats {
   total_pos_value: number;

@@ -1,7 +1,7 @@
 import { ArrowTrendingUpIcon } from "@heroicons/react/24/outline";
 import { type FC } from "react";
-import { UtilsManager } from "../classes/UtilsManager";
 import type { Market } from "../types";
+import { UtilsManager } from "../lib/classes/UtilsManager";
 
 const MarketCard: FC<{
   market: Market;

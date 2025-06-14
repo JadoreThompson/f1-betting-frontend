@@ -4,12 +4,12 @@ import {
   UserIcon,
 } from "@heroicons/react/24/outline";
 import { useEffect, useState, type FC } from "react";
-import { UtilsManager } from "../classes/UtilsManager";
 import BettingSlipCard from "../components/BettingSlipCard";
 import Header from "../components/Header";
 import MarketCard from "../components/MarketCard";
 
 import { Protected } from "../components/Protected";
+import { UtilsManager } from "../lib/classes/UtilsManager";
 import type { Market } from "../types";
 
 function generateMockMarkets(count: number): Market[] {
