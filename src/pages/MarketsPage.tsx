@@ -207,8 +207,44 @@ const MarketsPage: FC = () => {
         <Header />
 
         {/* Hero Section */}
-        <div className="bg-gradient-to-br from-gray-900 via-blue-900 to-purple-900 text-white">
-          <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-16">
+        <div className="h-100 relative text-white overflow-hidden">
+          <div className="w-full h-full bg-gradient-to-br from-gray-900 via-blue-900 to-purple-900">
+            {/* Logos */}
+            <div className="h-full w-full md:w-auto flex-center gap-4">
+              <img
+                src="src/assets/images/redbull_logo.png"
+                alt=""
+                className="h-15 md:h-30"
+              />
+              <img
+                src="src/assets/images/ferrari_logo.png"
+                alt=""
+                className="h-15 md:h-30"
+              />
+              <img
+                src="src/assets/images/mclaren_logo.png"
+                alt=""
+                className="h-20 md:h-40"
+              />
+            </div>
+            {/* Headshots */}
+            <img
+              src="src/assets/images/lewham01.png"
+              alt=""
+              className="h-full hidden md:block absolute top-0 -right-20"
+            />
+            <img
+              src="src/assets/images/maxver01.png"
+              alt=""
+              className="h-full hidden md:block absolute top-0 right-20"
+            />
+            <img
+              src="src/assets/images/oscpia01.png"
+              alt=""
+              className="h-full hidden md:block absolute top-0 right-60"
+            />
+          </div>
+          <div className="px-4 sm:px-6 lg:px-8 py-16 z-1 absolute left-0 top-0">
             <div className="grid grid-cols-1 lg:grid-cols-2 gap-12 items-center">
               <div>
                 <div className="inline-flex items-center gap-2 bg-blue-600/20 text-blue-200 px-3 py-1 rounded-full text-sm mb-4">

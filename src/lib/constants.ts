@@ -13,7 +13,7 @@ const NETWORK_CONFIGS: Record<ChainId, NetworkConfig> = {
     name: "Sepolia Testnet",
     chainId: ChainId.SEPOLIA,
     hexChainId: "0xaa36a7",
-    bettingEscrow: "0x4a1d32242f6a589D49060eC26E4f18B29e8a19FA",
+    bettingEscrow: "0x1839611f77279106AC4b2B522AD90B1903651f55",
     usdt: "0x92A1c620751ba38e885461c3e356D41a226962f3",
     blockExplorer: "https://sepolia.etherscan.io",
   },
@@ -31,43 +31,12 @@ const BETTING_ESCROW_ABI = [
     type: "function",
   },
   {
-    inputs: [
-      { name: "marketId", type: "uint256" },
-      { name: "participant", type: "address" },
-    ],
-    name: "containsParticipant",
-    outputs: [{ name: "", type: "bool" }],
-    stateMutability: "view",
-    type: "function",
-  },
-  {
-    inputs: [{ name: "", type: "uint256" }],
-    name: "marketEscrow",
-    outputs: [{ name: "", type: "uint256" }],
-    stateMutability: "view",
-    type: "function",
-  },
-  {
     inputs: [],
     name: "usdtToken",
     outputs: [{ name: "", type: "address" }],
     stateMutability: "view",
     type: "function",
-  },
-  {
-    inputs: [],
-    name: "volume",
-    outputs: [{ name: "", type: "uint256" }],
-    stateMutability: "view",
-    type: "function",
-  },
-  {
-    inputs: [],
-    name: "activeBetCount",
-    outputs: [{ name: "", type: "uint256" }],
-    stateMutability: "view",
-    type: "function",
-  },
+  }
 ] as const;
 
 const USDT_ABI = [
