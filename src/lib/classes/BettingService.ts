@@ -1,187 +1,11 @@
 import MetaMaskSDK from "@metamask/sdk";
 import { ethers } from "ethers";
-
-enum ChainId {
-  MAINNET = 1,
-  SEPOLIA = 11155111,
-}
-
-interface NetworkConfig {
-  name: string;
-  chainId: ChainId;
-  bettingEscrow: string;
-  usdt: string;
-  blockExplorer: string;
-}
-
-const NETWORK_CONFIGS: Record<ChainId, NetworkConfig> = {
-  [ChainId.MAINNET]: {
-    name: "Ethereum Mainnet",
-    chainId: ChainId.MAINNET,
-    bettingEscrow: "0x...",
-    usdt: "0xdac17f958d2ee523a2206206994597c13d831ec7",
-    blockExplorer: "https://etherscan.io",
-  },
-  [ChainId.SEPOLIA]: {
-    name: "Sepolia Testnet",
-    chainId: ChainId.SEPOLIA,
-    // bettingEscrow: "0x5e48d269d22CcA88c88A77CD1e43A6b1dFba9F36",
-    bettingEscrow: "0x4a1d32242f6a589D49060eC26E4f18B29e8a19FA",
-    // usdt: "0x0fe922d26FDe4a9160Bb2D145e851e2d9c2f3f84",
-    usdt: "0x92A1c620751ba38e885461c3e356D41a226962f3",
-    blockExplorer: "https://sepolia.etherscan.io",
-  },
-} as const;
-
-const BETTING_ESCROW_ABI = [
-  {
-    inputs: [
-      { name: "marketId", type: "uint256" },
-      { name: "amount", type: "uint256" },
-    ],
-    name: "placeBet",
-    outputs: [],
-    stateMutability: "nonpayable",
-    type: "function",
-  },
-  {
-    inputs: [
-      { name: "marketId", type: "uint256" },
-      { name: "participant", type: "address" },
-    ],
-    name: "containsParticipant",
-    outputs: [{ name: "", type: "bool" }],
-    stateMutability: "view",
-    type: "function",
-  },
-  {
-    inputs: [{ name: "", type: "uint256" }],
-    name: "marketEscrow",
-    outputs: [{ name: "", type: "uint256" }],
-    stateMutability: "view",
-    type: "function",
-  },
-  {
-    inputs: [],
-    name: "usdtToken",
-    outputs: [{ name: "", type: "address" }],
-    stateMutability: "view",
-    type: "function",
-  },
-  {
-    inputs: [],
-    name: "volume",
-    outputs: [{ name: "", type: "uint256" }],
-    stateMutability: "view",
-    type: "function",
-  },
-  {
-    inputs: [],
-    name: "activeBetCount",
-    outputs: [{ name: "", type: "uint256" }],
-    stateMutability: "view",
-    type: "function",
-  },
-] as const;
-
-const USDT_ABI = [
-  {
-    inputs: [
-      { name: "spender", type: "address" },
-      { name: "amount", type: "uint256" },
-    ],
-    name: "approve",
-    outputs: [{ name: "", type: "bool" }],
-    stateMutability: "nonpayable",
-    type: "function",
-  },
-  {
-    inputs: [
-      { name: "owner", type: "address" },
-      { name: "spender", type: "address" },
-    ],
-    name: "allowance",
-    outputs: [{ name: "", type: "uint256" }],
-    stateMutability: "view",
-    type: "function",
-  },
-  {
-    inputs: [{ name: "account", type: "address" }],
-    name: "balanceOf",
-    outputs: [{ name: "", type: "uint256" }],
-    stateMutability: "view",
-    type: "function",
-  },
-  {
-    inputs: [
-      { name: "to", type: "address" },
-      { name: "amount", type: "uint256" },
-    ],
-    name: "mint",
-    outputs: [],
-    stateMutability: "nonpayable",
-    type: "function",
-  },
-  {
-    inputs: [],
-    name: "decimals",
-    outputs: [{ name: "", type: "uint8" }],
-    stateMutability: "view",
-    type: "function",
-  },
-] as const;
-
-export enum BettingErrorType {
-  NETWORK_MISMATCH = "NETWORK_MISMATCH",
-  INVALID_AMOUNT = "INVALID_AMOUNT",
-  INSUFFICIENT_BALANCE = "INSUFFICIENT_BALANCE",
-  INSUFFICIENT_ALLOWANCE = "INSUFFICIENT_ALLOWANCE",
-  ALREADY_PARTICIPATED = "ALREADY_PARTICIPATED",
-  CONTRACT_NOT_FOUND = "CONTRACT_NOT_FOUND",
-  TRANSACTION_FAILED = "TRANSACTION_FAILED",
-  USER_REJECTED = "USER_REJECTED",
-  RATE_LIMITED = "RATE_LIMITED",
-  INVALID_MARKET = "INVALID_MARKET",
-}
-
-export class BettingError extends Error {
-  constructor(
-    public type: BettingErrorType,
-    message: string,
-    public originalError?: any
-  ) {
-    super(message);
-    this.name = "BettingError";
-  }
-}
-
-export interface BetResult {
-  success: boolean;
-  transactionHash?: string;
-  error?: BettingError;
-  gasUsed?: string;
-}
-
-interface SecurityValidation {
-  isValidNetwork: boolean;
-  isValidAmount: boolean;
-  hasValidContracts: boolean;
-  isRateLimited: boolean;
-}
-
-function CheckContractsInitialised<
-  T extends { bettingContract: any; usdtContract: any }
->(target: any, propertyKey: string, descriptor: PropertyDescriptor): any {
-  const originalMethod = descriptor.value;
-
-  descriptor.value = function (this: T, ...args: any[]) {
-    if (!this.bettingContract || !this.usdtContract)
-      throw new Error("Contracts not initialised!");
-    return originalMethod.apply(this, args);
-  };
-
-  return descriptor;
-}
+import { BettingError, BettingErrorType } from "../errors/bettingError";
+import type { BetResult } from "../types/betResult";
+import { ChainId, type NetworkConfig } from "../types/networkConfig";
+import type { SecurityValidation } from "../types/securityValidation";
+import { BETTING_ESCROW_ABI, NETWORK_CONFIGS, USDT_ABI } from "../constants";
+import { CheckContractsInitialised } from "../decorators";
 
 // TODO: DRY and optimise.
 export class BettingService {
@@ -190,8 +14,8 @@ export class BettingService {
   private currentNetwork: NetworkConfig | null = null;
   private bettingContract: ethers.Contract | null = null;
   private usdtContract: ethers.Contract | null = null;
-  private readonly MAX_UINT256 = 2 ** 256 - 1;
-  private readonly MAX_GAS_PRICE = ethers.parseUnits("1000", "gwei"); // 100 gwei max
+  private readonly MAX_UINT256: number = 2 ** 256 - 1;
+  private readonly MAX_GAS_PRICE: bigint = ethers.parseUnits("1000", "gwei"); // 100 gwei max
 
   /**
    * Validates and sanitizes input for number or address types.
@@ -289,8 +113,13 @@ export class BettingService {
   }
 
   /**
-   * Connects to MetaMask and initializes the betting service.
+   * Connects to MetaMask, retrieves the user's Ethereum account, and sets up
+   * the provider, signer, and contract instances needed for betting. Validates
+   * the network and contracts before returning the connected account address.
+   *
    * @returns {Promise<string>} The connected account address.
+   * @throws {BettingError} When the user rejects the connection request.
+   * @throws {Error} For other connection or validation failures.
    */
   async connectToMetaMask(): Promise<string> {
     try {
@@ -382,12 +211,10 @@ export class BettingService {
     const userAddress = await this.signer!.getAddress();
 
     const currentBalance = await this.usdtContract.balanceOf(userAddress);
-  
-    if (currentBalance < amount) {
-      await this.usdtContract.mint(userAddress, amountWei);
-    }
 
-    // Check current allowance
+    if (currentBalance < amount) {
+      await this.usdtContract.mint(userAddress, amountWei); // Only here for beta.
+    }
 
     const currentAllowance = await this.usdtContract.allowance(
       userAddress,
