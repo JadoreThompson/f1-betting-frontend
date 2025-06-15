@@ -163,7 +163,7 @@ const BettingSlipCard: FC<{
         <div className="relative">
           <button
             onClick={handleClose}
-            className="abettingServiceolute right-0 top-2 hover:cursor-pointer"
+            className="absolute right-2 top-2 hover:cursor-pointer"
           >
             <XMarkIcon className="w-7 h-7" />
           </button>
