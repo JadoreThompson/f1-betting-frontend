@@ -13,9 +13,10 @@ import { useAuthStore } from "../stores/authStore";
 const LoginPage = () => {
   const navigate = useNavigate();
   const { login } = useAuthStore();
-  const [showPassword, setShowPassword] = useState(false);
-  const [password, setPassword] = useState("");
-  const [rememberMe, setRememberMe] = useState(false);
+  const [showPassword, setShowPassword] = useState<boolean>(false);
+  const [password, setPassword] = useState<string>("");
+  const [rememberMe, setRememberMe] = useState<boolean>(false);
+  const [error, setError] = useState<string | null>(null);
 
   return (
     <div className="min-h-screen bg-gradient-to-br from-blue-50 via-purple-50 to-pink-50 flex items-center justify-center p-4">
@@ -25,9 +26,14 @@ const LoginPage = () => {
           <form
             className="p-6 space-y-4"
             onSubmit={async (e) => {
-              await handleAuthFormSubmit(e, "login");
-              login();
-              navigate("/");
+              try {
+                setError(null);
+                await handleAuthFormSubmit(e, "login");
+                login();
+                navigate("/");
+              } catch (error) {
+                setError((error as Error).message);
+              }
             }}
           >
             {/* Email Field */}
@@ -93,6 +99,12 @@ const LoginPage = () => {
                 <span className="ml-2 text-sm text-gray-600">Remember me?</span>
               </label>
             </div>
+
+            {error && (
+              <div className="w-full flex-center">
+                <span className="ml-2 text-sm error">{error}</span>
+              </div>
+            )}
 
             {/* Submit Button */}
             <button

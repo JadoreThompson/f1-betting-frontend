@@ -17,10 +17,8 @@ export async function handleAuthFormSubmit(
       credentials: "include",
     });
 
-    if (!rsp.ok) {
-      throw new Error(`Failed to ${authType}");`);
-    }
+    if (!rsp.ok) throw new Error((await rsp.json())["error"]);
   } catch (error) {
-    console.error(`Error during ${authType}:`, error);
+    throw error;
   }
 }

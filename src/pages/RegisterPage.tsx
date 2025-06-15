@@ -15,6 +15,7 @@ const RegisterPage = () => {
   const navigate = useNavigate();
   const [showPassword, setShowPassword] = useState<boolean>(false);
   const [rememberMe, setRememberMe] = useState<boolean>(false);
+  const [error, setError] = useState<string | null>(null);
 
   return (
     <div className="min-h-screen bg-gradient-to-br from-blue-50 via-purple-50 to-pink-50 flex items-center justify-center p-4">
@@ -24,9 +25,13 @@ const RegisterPage = () => {
           <form
             className="p-6 space-y-4"
             onSubmit={async (e) => {
-              await handleAuthFormSubmit(e, "register");
-              login();
-              navigate("/");
+              try {
+                await handleAuthFormSubmit(e, "register");
+                login();
+                navigate("/");
+              } catch (error) {
+                setError((error as Error).message);
+              }
             }}
           >
             {/* Email Field */}
@@ -105,12 +110,19 @@ const RegisterPage = () => {
                   checked={rememberMe}
                   onChange={(e) => setRememberMe(e.target.checked)}
                   className="w-4 h-4 text-blue-600 border-gray-300 rounded focus:ring-blue-500"
+                  required
                 />
                 <span className="ml-2 text-sm text-gray-600">
                   Accept Terms and Conditions
                 </span>
               </label>
             </div>
+
+            {error && (
+              <div className="w-full flex-center">
+                <span className="ml-2 text-sm error">{error}</span>
+              </div>
+            )}
 
             {/* Submit Button */}
             <button
