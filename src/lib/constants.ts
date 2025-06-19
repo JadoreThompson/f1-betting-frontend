@@ -13,7 +13,7 @@ const NETWORK_CONFIGS: Record<ChainId, NetworkConfig> = {
     name: "Sepolia Testnet",
     chainId: ChainId.SEPOLIA,
     hexChainId: "0xaa36a7",
-    bettingEscrow: "0x1839611f77279106AC4b2B522AD90B1903651f55",
+    bettingEscrow: "0xF0329f1071A69633360d08320AeE3aeb3933a38c",
     usdt: "0x92A1c620751ba38e885461c3e356D41a226962f3",
     blockExplorer: "https://sepolia.etherscan.io",
   },
@@ -24,6 +24,7 @@ const BETTING_ESCROW_ABI = [
     inputs: [
       { name: "marketId", type: "uint256" },
       { name: "amount", type: "uint256" },
+      { name: "side", type: "uint8" },
     ],
     name: "placeBet",
     outputs: [],

@@ -9,7 +9,9 @@ import {
 import { useEffect, useRef, useState, type FC, type JSX } from "react";
 
 import Header from "../components/Header";
+import { BettingService } from "../lib/classes/BettingService";
 import { UtilsManager } from "../lib/classes/UtilsManager";
+import { ChainId } from "../lib/types/networkConfig";
 
 interface UserStats {
   total_pos_value: number;
@@ -143,7 +145,7 @@ const generatePlaceholderActivities = (
       amount: Math.floor(Math.random() * 2000 + 50),
       address: `0x${Math.random().toString(16).substr(2, 8)}...${Math.random()
         .toString(16)
-        .substr(2, 4)}`,
+        .slice(2, 6)}`,
       title: titles[index % titles.length],
       category: categories[index % categories.length],
     });
@@ -176,6 +178,9 @@ const PortfolioPage: FC = () => {
   const [activeTab, setActiveTab] = useState<"positions" | "activity">(
     "positions"
   );
+  const [walletAddress, setWalletAddress] = useState<string | undefined>(
+    undefined
+  );
   const [positions, setPositions] = useState<Position[] | undefined>(undefined);
   const [activities, setActivities] = useState<Activity[] | undefined>(
     undefined
@@ -203,8 +208,20 @@ const PortfolioPage: FC = () => {
   const positionsRef = useRef<Position[] | undefined>(undefined);
   const activitiesRef = useRef<Activity[] | undefined>(undefined);
 
+  const WALLET_HEADER_KEY = "X-Wallet-Address";
   const currentPaginationInfo: PaginationInfo =
     activeTab === "positions" ? positionsPagination : activitiesPagination;
+
+  useEffect(() => console.log(walletAddress), [walletAddress]);
+
+  useEffect(() => {
+    const connectToWeb3 = async (): Promise<void> => {
+      const bettingService = new BettingService(ChainId.SEPOLIA);
+      setWalletAddress(await bettingService.connect());
+    };
+
+    connectToWeb3();
+  }, []);
 
   useEffect(() => {
     const loadPositions = async () => {
@@ -238,6 +255,9 @@ const PortfolioPage: FC = () => {
           UtilsManager.BASE_URL + `/user/positions?page=${page}`,
           {
             method: "GET",
+            headers: {
+              [WALLET_HEADER_KEY]: walletAddress!,
+            },
             credentials: "include",
           }
         );
@@ -262,8 +282,8 @@ const PortfolioPage: FC = () => {
       }
     };
 
-    loadPositions();
-  }, [page, activeTab]);
+    if (walletAddress) loadPositions();
+  }, [walletAddress, page, activeTab]);
 
   useEffect(() => {
     const loadActivities = async () => {
@@ -297,6 +317,9 @@ const PortfolioPage: FC = () => {
           UtilsManager.BASE_URL + `/user/activity?page=${page}`,
           {
             method: "GET",
+            headers: {
+              [WALLET_HEADER_KEY]: walletAddress!,
+            },
             credentials: "include",
           }
         );
@@ -321,13 +344,16 @@ const PortfolioPage: FC = () => {
       }
     };
 
-    loadActivities();
-  }, [page, activeTab]);
+    if (walletAddress) loadActivities();
+  }, [walletAddress, page, activeTab]);
 
   useEffect(() => {
     const loadUserSummary = async () => {
       const rsp = await fetch(UtilsManager.BASE_URL + "/user/summary", {
         method: "GET",
+        headers: {
+          [WALLET_HEADER_KEY]: walletAddress!,
+        },
         credentials: "include",
       });
 
@@ -335,8 +361,8 @@ const PortfolioPage: FC = () => {
       setUser(d);
     };
 
-    loadUserSummary();
-  }, []);
+    if (walletAddress) loadUserSummary();
+  }, [walletAddress]);
 
   /**
    * Checks if the data for `page` already exists.

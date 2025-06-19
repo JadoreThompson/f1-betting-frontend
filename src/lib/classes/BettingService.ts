@@ -9,6 +9,7 @@ import {
   ValidationErrorType,
 } from "../errors/ValidationError";
 import { Web3Error } from "../errors/Web3Error";
+import type { BetSide } from "../types/betSide";
 import { ChainId, type NetworkConfig } from "../types/networkConfig";
 
 export class BettingService {
@@ -236,7 +237,11 @@ export class BettingService {
    * @throws {ValidationError, Web3Error} on input, balance, allowance, or transaction failure.
    */
   @CheckContractsInitialised
-  async placeBet(marketId: number, amount: string): Promise<string> {
+  async placeBet(
+    marketId: number,
+    amount: string,
+    side: BetSide
+  ): Promise<string> {
     try {
       const sanitisedAmount = this.sanitiseInput(amount, "number");
 
@@ -269,7 +274,11 @@ export class BettingService {
         }
       }
 
-      const tx = await this.bettingContract!.placeBet(marketId, amountWei);
+      const tx = await this.bettingContract!.placeBet(
+        marketId,
+        amountWei,
+        side
+      );
       await tx.wait();
 
       return tx.hash as string;

@@ -8,18 +8,9 @@ import { useEffect, useRef, useState, type FC, type JSX } from "react";
 
 import { BettingService } from "../lib/classes/BettingService";
 import { UtilsManager } from "../lib/classes/UtilsManager";
+import { BetSide } from "../lib/types/betSide";
 import { ChainId } from "../lib/types/networkConfig";
 import type { Market } from "../types";
-
-type Side = "back" | "lay";
-
-interface EnginePayload {
-  amount: number;
-  side: Side;
-  market_id: number;
-  wallet_address: string;
-  txn_address: string;
-}
 
 const BettingSlipCard: FC<{
   market: Market;
@@ -30,7 +21,7 @@ const BettingSlipCard: FC<{
   const [isAwaitingHealthCheck, setIsAwaitingHealthCheck] =
     useState<boolean>(true);
   const [isHealthy, setIsHealthy] = useState<boolean | undefined>(undefined);
-  const [curSide, setSide] = useState<Side>("back");
+  const [curSide, setSide] = useState<BetSide>(BetSide.BACK);
   const [amount, setAmount] = useState("");
 
   const [isVisible, setIsVisible] = useState(false);
@@ -94,32 +85,15 @@ const BettingSlipCard: FC<{
     return `${numerator}/${denominator}`;
   };
 
-  const calculatePayout = (stake: number): { back: number; lay: number } => ({
-    back: stake * market.back_multiplier,
-    lay: stake * market.lay_multiplier,
+  const calculatePayout = (stake: number): Record<BetSide, number> => ({
+    [BetSide.BACK]: stake * market.back_multiplier,
+    [BetSide.LAY]: stake * market.lay_multiplier,
   });
 
   const numericAmount = parseFloat(amount) || 0;
   const payout = Object.freeze(calculatePayout(numericAmount));
 
   const sanitizeInput = (value: string) => /^\d*\.?\d*$/.test(value.trim());
-
-  async function sendToEngine(payload: EnginePayload): Promise<void> {
-    try {
-      const rsp = await fetch(UtilsManager.BASE_URL + "/bet/create", {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-        },
-        body: JSON.stringify(payload),
-        credentials: "include",
-      });
-
-      if (!rsp.ok) throw new Error(`An error occured ${rsp.status}`);
-    } catch (error) {
-      throw new Error("Failed to send bet to engine. Please try again.");
-    }
-  }
 
   async function handleFormSubmit(e: React.FormEvent): Promise<void> {
     e.preventDefault();
@@ -133,20 +107,15 @@ const BettingSlipCard: FC<{
 
     try {
       setShowMetaMaskModal(true);
-
-      const formData = {
-        amount: Number.parseFloat(amount),
-        side: curSide,
-        market_id: market.market_id,
-        wallet_address: await bettingService.connect(),
-      } as EnginePayload;
+      
+      await bettingService.connect();
+      await bettingService.placeBet(
+        market.market_id,
+        new FormData(e.target as HTMLFormElement).get("amount") as string,
+        curSide
+      );
 
       setMetaMaskModalMessage("Confirm contract to place bet.");
-
-      const result = await bettingService.placeBet(market.market_id, amount);
-      formData.txn_address = result;
-
-      await sendToEngine(formData);
       setSuccess("Bet placed successfully");
       setTimeout(() => handleClose(), 1000);
     } catch (error) {
@@ -197,9 +166,9 @@ const BettingSlipCard: FC<{
               <div className="grid grid-cols-2 gap-2">
                 <button
                   type="button"
-                  onClick={() => setSide("back")}
+                  onClick={() => setSide(BetSide.BACK)}
                   className={`p-3 rounded-xl border-2 transition-all duration-200 flex items-center justify-center gap-2 ${
-                    curSide === "back"
+                    curSide === BetSide.BACK
                       ? "border-green-500 bg-green-50 text-green-700"
                       : "border-gray-200 hover:border-gray-300 text-gray-600"
                   }`}
@@ -212,9 +181,9 @@ const BettingSlipCard: FC<{
                 </button>
 
                 <button
-                  onClick={() => setSide("lay")}
+                  onClick={() => setSide(BetSide.LAY)}
                   className={`p-3 rounded-xl border-2 transition-all duration-200 flex items-center justify-center gap-2 ${
-                    curSide === "lay"
+                    curSide === BetSide.LAY
                       ? "border-purple-500 bg-purple-50 text-purple-700"
                       : "border-gray-200 hover:border-gray-300 text-gray-600"
                   }`}
@@ -284,7 +253,7 @@ const BettingSlipCard: FC<{
                       <span className="text-gray-600">Potential Profit:</span>
                       <span
                         className={`font-semibold ${
-                          curSide === "back"
+                          curSide === BetSide.BACK
                             ? "text-green-600"
                             : "text-purple-600"
                         }`}
@@ -294,7 +263,7 @@ const BettingSlipCard: FC<{
                     </div>
                     <div className="flex justify-between pt-2 border-t border-gray-200">
                       <span className="text-gray-900 font-medium">
-                        {curSide === "back"
+                        {curSide === BetSide.BACK
                           ? "Total Return:"
                           : "Max Liability:"}
                       </span>
@@ -328,14 +297,14 @@ const BettingSlipCard: FC<{
                   type="submit"
                   disabled={!numericAmount || numericAmount <= 0}
                   className={`w-full py-4 px-6 rounded-xl font-semibold text-lg transition-all duration-200 hover:cursor-pointer ${
-                    curSide === "back"
+                    curSide === BetSide.BACK
                       ? "bg-green-600 hover:bg-green-700 disabled:bg-gray-300 text-white"
                       : "bg-purple-600 hover:bg-purple-700 disabled:bg-gray-300 text-white"
                   }`}
                 >
                   {numericAmount > 0 ? (
                     <>
-                      Place {curSide === "back" ? "Back" : "Lay"} Bet - $
+                      Place {curSide === BetSide.BACK ? "Back" : "Lay"} Bet - $
                       {numericAmount.toFixed(2)}
                     </>
                   ) : (

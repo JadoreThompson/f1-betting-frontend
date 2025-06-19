@@ -8,7 +8,6 @@ import BettingSlipCard from "../components/BettingSlipCard";
 import Header from "../components/Header";
 import MarketCard from "../components/MarketCard";
 
-import { Protected } from "../components/Protected";
 import { UtilsManager } from "../lib/classes/UtilsManager";
 import type { Market } from "../types";
 
@@ -190,14 +189,13 @@ const MarketsPage: FC = () => {
   return (
     <>
       {showBetSlip && currentMarket && (
-        <Protected
-          Component={BettingSlipCard}
-          args={{
-            market: currentMarket,
-            setShow: (arg: boolean) => {
-              setShowBetSlip(arg);
+        <BettingSlipCard
+          market={currentMarket}
+          setShow={(arg: boolean) => {
+            setShowBetSlip(arg);
+            if (!arg) {
               setCurrentMarket(undefined);
-            },
+            }
           }}
         />
       )}

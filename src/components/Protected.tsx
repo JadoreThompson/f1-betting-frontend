@@ -1,18 +1,18 @@
 import { ArrowTrendingUpIcon } from "@heroicons/react/24/outline";
 import { useEffect, useState, type ComponentType } from "react";
 import { useNavigate } from "react-router";
-import { useAuthStore } from "../stores/authStore";
 import { UtilsManager } from "../lib/classes/UtilsManager";
+import { useAuthStore } from "../stores/authStore";
 
-interface ProtectedProps<T extends object> {
+interface LoginProtectedProps<T extends object> {
   Component: ComponentType<T>;
   args?: T;
 }
 
-export function Protected<T extends object>({
+export function LoginProtected<T extends object>({
   Component,
   args,
-}: ProtectedProps<T>) {
+}: LoginProtectedProps<T>) {
   const [isLoading, setIsLoading] = useState<boolean>(true);
   const { login, logout } = useAuthStore();
   const navigate = useNavigate();
